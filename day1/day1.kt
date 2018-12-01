@@ -13,7 +13,7 @@ fun main(args: Array<String>) {
     val input: List<Int> = File("day1/input.txt").readLines().map(String::toInt)
 
     // part 1
-    val result = input.fold(0, Int::plus)
+    val result = input.sum()
     println("Part 1 result: ${result}")
 
     // part 2
