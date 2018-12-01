@@ -13,5 +13,5 @@ build:
 day%: build/day%.jar
 	jar=`realpath $^` && cd src/`basename $< .jar` && kotlin $$jar
 
-build/day%.jar: src/day%/*.kt | build
+build/day%.jar: src/day%/*.kt src/toolbox/*.kt | build
 	kotlinc -include-runtime -no-reflect -d $@ $^

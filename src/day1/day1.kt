@@ -1,13 +1,7 @@
-package adventofcode2018
+package adventofcode2018.day1
 
 import java.io.File
-
-fun <T> Sequence<T>.repeat() = generateSequence { asIterable() }.flatten()
-
-fun <T, U> Sequence<T>.scanl(initial: U, f: (U, T) -> U): Sequence<U> {
-    var acc: U = initial
-    return map { x -> acc = f(acc, x); acc }
-}
+import adventofcode2018.toolbox.*
 
 fun main(args: Array<String>) {
     val input: List<Int> = File("input.txt").readLines().map(String::toInt)
