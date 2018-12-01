@@ -10,7 +10,7 @@ fun <T, U> Sequence<T>.scanl(initial: U, f: (U, T) -> U): Sequence<U> {
 }
 
 fun main(args: Array<String>) {
-    val input: List<Int> = File("day1/input.txt").readLines().map(String::toInt)
+    val input: List<Int> = File("input.txt").readLines().map(String::toInt)
 
     // part 1
     val result = input.sum()
