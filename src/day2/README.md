@@ -33,7 +33,9 @@ Nothing jumped out at me after a few minutes thinking about it so let's try the
 brute force way. Get all pairs of input strings and filter the pairs that differ
 by only one character.
 
-First a string difference function. When working with pairs reach for a `zip` function:
+First a string difference function. When working with pairs reach for a `zip` function.
+`CharSequence` has a particularly useful [zip](https://kotlinlang.org/api/latest/jvm/stdlib/kotlin.text/zip.html)
+that takes a transformation function so we can do two steps in one:
 ```
 fun difference(s1: String, s2: String): Int = 
     s1.zip(s2, { (x, y) -> if (x == y) then 0 else 1 }).sum()
