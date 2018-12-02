@@ -12,4 +12,5 @@ suggestions and relying on Gradle magic. I'm using syntax highlighting
 only and the command-line compiler with a Makefile.
 
 ## Solutions
-* [Day1](src/day1/README.md)
+* [Day1](src/day1/)
+* [Day2](src/day2/)

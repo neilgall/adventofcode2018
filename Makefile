@@ -11,7 +11,7 @@ build:
 	mkdir -p build
 
 day%: build/day%.jar
-	jar=`realpath $^` && cd src/`basename $< .jar` && kotlin $$jar
+	jar=`realpath $^` && cd src/`basename $< .jar` && kotlin $$jar $(INPUT)
 
 build/day%.jar: src/day%/*.kt src/toolbox/*.kt | build
 	kotlinc -include-runtime -no-reflect -d $@ $^
