@@ -7,15 +7,14 @@ import org.jparsec.Scanners.*
 
 data class Origin(val left: Int, val top: Int)
 data class Size(val width: Int, val height: Int)
-data class Box(val x: IntRange, val y: IntRange)
 data class Pos(val x: Int, val y: Int)
 
-data class Claim(val id: Int, val box: Box) {
+data class Claim(val id: Int, val x: IntRange, val y: IntRange) {
     constructor(id: Int, origin: Origin, size: Size):
-        this(id, Box((origin.left .. origin.left + size.width - 1), (origin.top .. origin.top + size.height - 1)))
+        this(id, (origin.left .. origin.left + size.width - 1), (origin.top .. origin.top + size.height - 1))
 
-    fun positions(): Sequence<Pos> = box.x.asSequence().flatMap { x ->
-        box.y.asSequence().map { y -> Pos(x, y) }
+    fun positions(): Sequence<Pos> = x.asSequence().flatMap { x ->
+        y.asSequence().map { y -> Pos(x, y) }
     }
 }
 
