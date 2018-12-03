@@ -78,3 +78,16 @@ val material = mutableMapOf<Pos, Int>()
 claims.forEach { claim -> claim.positions().forEach { pos -> material[pos] = (material[pos] ?: 0) + 1 } }
 val overlapping = material.filterValues { it >= 2 }.size
 ```
+
+## Part 2
+This turns the algorithm around. Now we need to mark all the claims that overlap
+and find the unmarked one at the end. I tried a pure functional approach but 
+Kotlin doesn't have efficient pure map and set operations so the runtime was
+unreasonable. The solution using mutable collections is still pretty clear though.
+Pseudocode:
+```
+start with a candidate set of all claim IDs
+for each position in each claim:
+    if the position is unclaimed, claim it with the claim ID
+    otherwise remove the claimed ID and the current ID from the candidate set
+```
