@@ -1,17 +1,42 @@
 
-DAYS := $(patsubst %,day%,1 2)
+INPUT ?= input.txt
+DAYS := $(patsubst %,day%,1 2 3)
 all: $(DAYS)
 
 .PHONY: all clean
 
 clean:
-	rm -rf build
+	rm -rf build lib
 
 build:
 	mkdir -p build
 
-day%: build/day%.jar
-	jar=`realpath $^` && cd src/`basename $< .jar` && kotlin $$jar $(INPUT)
+lib:
+	mkdir -p lib
 
-build/day%.jar: src/day%/*.kt src/toolbox/*.kt | build
-	kotlinc -include-runtime -no-reflect -d $@ $^
+day%: build/day%.jar
+	cp=`cat src/$@/classpath 2>/dev/null || true` && \
+	class=`python -c 'print("$@".capitalize() + "Kt")'` && \
+		kotlin -cp $<:$$cp adventofcode2018.$@.$$class src/$@/$(INPUT)
+
+build/day%.jar: src/day%/*.kt | toolbox
+	src=`dirname $<` && \
+	cp=`cat $$src/classpath 2>/dev/null || true` && \
+		kotlinc -cp build/toolbox.jar:$$cp -d $@ $^
+
+day3: jparsec 
+
+.PHONY: toolbox
+toolbox: build/toolbox.jar
+
+build/toolbox.jar: src/toolbox/*.kt | build
+	kotlinc -d $@ $^
+
+.PHONY: jparsec
+jparsec: lib lib/jparsec/jparsec/target/jparsec-3.1-SNAPSHOT.jar
+
+lib/jparsec/jparsec/target/jparsec-3.1-SNAPSHOT.jar:
+	(cd lib && \
+		git clone https://github.com/jparsec/jparsec.git && \
+		cd jparsec && \
+		mvn package)

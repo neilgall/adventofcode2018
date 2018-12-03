@@ -4,7 +4,7 @@ import java.io.File
 import adventofcode2018.toolbox.*
 
 fun main(args: Array<String>) {
-    val input: List<Int> = File("input.txt").readLines().map(String::toInt)
+    val input: List<Int> = File(args[0]).readLines().map(String::toInt)
 
     // part 1
     val result = input.sum()

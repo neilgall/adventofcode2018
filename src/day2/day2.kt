@@ -21,8 +21,7 @@ fun <T> pairs(xs: Collection<T>): List<Pair<T, T>> = when {
 }
 
 fun main(args: Array<String>) {
-    val file = if (args.isEmpty()) "input.txt" else args[0]
-    val input = File(file).readLines().map(String::trim)
+    val input = File(args[0]).readLines().map(String::trim)
 
     // Part 1
     val counts = input.map(::repeatCounts)
