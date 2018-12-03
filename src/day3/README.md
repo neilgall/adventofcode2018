@@ -21,7 +21,7 @@ combinators are provided and you can write your own.
 With a more complex language you'd build a lexer using JParsec which turned the
 input characters into a sequence of tokens, ignoring whitespace and comments,
 etc., then build a second layer parser defining a full grammar of tokens. For
-the claim syntax in this puzzle I just built a simple parser for each line.t s
+the claim syntax in this puzzle I just built a simple parser for each line.
 Parsing the input data takes a few data definitions and six lines of declarative
 code:
 ```
@@ -82,12 +82,12 @@ val overlapping = material.filterValues { it >= 2 }.size
 ## Part 2
 This turns the algorithm around. Now we need to mark all the claims that overlap
 and find the unmarked one at the end. I tried a pure functional approach but 
-Kotlin doesn't have efficient pure map and set operations so the runtime was
+Kotlin doesn't have efficient pure map and set operations so the execution time was
 unreasonable. The solution using mutable collections is still pretty clear though.
 Pseudocode:
 ```
 start with a candidate set of all claim IDs
 for each position in each claim:
     if the position is unclaimed, claim it with the claim ID
-    otherwise remove the claimed ID and the current ID from the candidate set
+    otherwise the claimed ID and the current ID overlap so remove both from the candidate set
 ```
