@@ -1,6 +1,6 @@
 
 INPUT ?= input.txt
-DAYS := $(patsubst %,day%,1 2 3)
+DAYS := $(patsubst %,day%,1 2 3 4)
 all: $(DAYS)
 
 .PHONY: all clean
