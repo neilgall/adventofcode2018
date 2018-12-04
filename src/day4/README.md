@@ -17,3 +17,118 @@ the code clear and flexible.
 Of course I'm going to use the One True Parsing method of parser combinators
 again. It can seem like overkill for such simple examples but in the real
 world it pays off in the long run.
+
+The event model is a [sum type](https://chadaustin.me/2015/07/sum-types/):
+```
+sealed class Event {
+    abstract val time: LocalDateTime
+    data class BeginShift(override val time: LocalDateTime, val guard: Int): Event()
+    data class FallAsleep(override val time: LocalDateTime): Event()
+    data class WakeUp(override val time: LocalDateTime): Event()
+}
+```
+
+A few parsing helpers:
+```
+fun <T> Parser<T>.skip(c: Char): Parser<T> = followedBy(isChar(c))
+fun <T> Parser<T>.skip(s: String): Parser<T> = followedBy(string(s))
+val integer: Parser<Int> = INTEGER.map(String::toInt)
+```
+
+Every event has a date-time, fortunately with the fields in exactly the right
+order for one of `java.time.LocalDateTime`'s constructor methods:
+```
+val date: Parser<LocalDateTime> = isChar('[').next(sequence(
+    integer.skip('-'),
+    integer.skip('-'),
+    integer.skip(' '),
+    integer.skip(':'),
+    integer.skip("] "),
+    LocalDateTime::of
+))
+```
+
+We need a parser for each event type, and a top-level parser that chooses any
+of them:
+```
+val beginShift: Parser<Event> =
+    sequence(date.skip("Guard #"), integer.skip(" begins shift"), Event::BeginShift)
+
+val fallAsleep: Parser<Event> =
+    date.skip("falls asleep").map(Event::FallAsleep)
+
+val wakeUp: Parser<Event> =
+    date.skip("wakes up").map(Event::WakeUp)
+
+val event: Parser<Event> =
+    or(beginShift, fallAsleep, wakeUp)
+```
+
+You can keep your regular expressions.
+
+
+## Interpreting Events
+The full-on design for this is to build a Free Monad where the events become
+actions on an immutable state. Based on my experience yesterday of trying
+to use immutable maps in Kotlin I'm going to take a halfway house approach.
+I'll fold the event list over a partial state and use side-effects to mutate
+the map as we go. This code structure makes everything really explicit and
+ensures you've thought about all the possible events in each state.
+
+First a model for a guard with all the captured information:
+```
+data class Guard(val id: Int, val minutesAsleep: Int, val daysByMinute: Map<Int, Int>)
+```
+
+And another sum type for the intermediate states:
+```
+sealed class State {
+    object Initial: State()
+    data class OnDuty(val guard: Guard): State()
+    data class Asleep(val guard: Guard, val sleepMinute: Int): State()
+}
+```
+
+When we get a BeginShift event, we enter the OnDuty state, which remembers the
+guard object. When he falls asleep we enter the Asleep state capturing the
+start minute along with the guard. On a wake event we have all the information
+we need to update the Guard and continue.
+
+```
+events.sorted().fold(State.Initial as State) { state, event ->
+    when(event) {
+        is Event.BeginShift -> {
+            val guard = guards[event.guard] ?: Guard(event.guard, 0, mapOf())
+            guards[guard.id] = guard
+            State.OnDuty(guard)
+        }
+        is Event.FallAsleep -> when(state) {
+            is State.OnDuty -> State.Asleep(state.guard, event.time.minute)
+            else -> throw IllegalStateException("FallAsleep event in ${state}")
+        }
+        is Event.WakeUp -> when(state) {
+            is State.Asleep -> {
+                val guard = state.guard.sleep(state.sleepMinute .. event.time.minute - 1)
+                guards[state.guard.id] = guard
+                State.OnDuty(guard)
+            }
+            else -> throw IllegalStateException("WakeUp event in ${state}")
+        }
+    }
+}
+```
+
+One thing that caught me out here is a guard can sleep multiple times on his
+shift. So the output state of a WakeUp event is OnDuty, not Initial.
+
+## Part 1
+After building the Guard model, answering the part 1 question is pretty much a 
+direct translation of the Strategy 1 description into code:
+
+```
+fun part1(guards: Collection<Guard>): Int {
+    val guard = guards.sortedBy { g -> g.minutesAsleep }.last()
+    val minute = guard.daysByMinute.entries.sortedBy { e -> e.value }.last().key
+    return guard.id * minute
+}
+```
