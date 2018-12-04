@@ -108,9 +108,22 @@ fun part1(guards: Collection<Guard>): Int {
     return guard.id * minute
 }
 
+// Part 2
+
+fun part2(guards: Collection<Guard>): Int {
+    data class SleepEvent(val guard: Int, val minute: Int, val count: Int)
+    val sleepEvents = guards.flatMap { guard ->
+        guard.daysByMinute.map { (minute, count) -> SleepEvent(guard.id, minute, count) }
+    }
+
+    val mostFrequent = sleepEvents.sortedBy { e -> e.count }.last()
+    return mostFrequent.guard * mostFrequent.minute
+}
+
 fun main(args: Array<String>) {
     val events = parseEvents(args[0])
     val guards = runEvents(events)
 
     println("Part 1: ${part1(guards)}")
+    println("Part 2: ${part2(guards)}")
 }

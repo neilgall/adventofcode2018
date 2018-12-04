@@ -1,11 +1,11 @@
 # Day 4
 Today we're presented with event data where th events are not necessarily
-ordered and the information they contain in partial. This sort of scenario
+ordered and the information they contain is partial. This sort of scenario
 is pretty common in communications protocols and user interface code. I'm
 going to break the problem down as follows:
 
 1. Parse the input data to an event list
-2. Sort the event list by time if that's necessary
+2. Sort the event list by time
 3. Run the events through an interpreter to assemble all the information
 4. Keep asleep counts keyed by minute so the most frequent can be found
 
@@ -68,11 +68,11 @@ You can keep your regular expressions.
 
 
 ## Interpreting Events
-The full-on design for this is to build a Free Monad where the events become
-actions on an immutable state. Based on my experience yesterday of trying
-to use immutable maps in Kotlin I'm going to take a halfway house approach.
-I'll fold the event list over a partial state and use side-effects to mutate
-the map as we go. This code structure makes everything really explicit and
+The full-on design for this is to build a [Free Monad](https://softwaremill.com/free-monads/)
+where the events become actions on an immutable state. Based on my experience
+yesterday of trying to use immutable maps in Kotlin I'm going to take a halfway
+house approach. I'll fold the event list over a partial state and use side-effects
+to mutate the map as we go. This code structure makes everything really explicit and
 ensures you've thought about all the possible events in each state.
 
 First a model for a guard with all the captured information:
@@ -132,3 +132,18 @@ fun part1(guards: Collection<Guard>): Int {
     return guard.id * minute
 }
 ```
+
+## Part 2
+Find the answer using the second strategy means reorganising our data a bit.
+We have sleep events by minute by guard, but need sleep events by guard by minute.
+With a small struct to keep things clear that should be easy to transform:
+
+```
+data class SleepEvent(val guard: Int, val minute: Int, val count: Int)
+
+val sleepEvents = guards.flatMap { guard ->
+    guard.daysByMinute.map { (minute, count) -> SleepEvent(guard.id, minute, count) }
+}
+```
+
+Sort these by count and the answer is right there at the end of the list.
