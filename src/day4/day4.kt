@@ -48,14 +48,7 @@ fun parseEvents(path: String): List<Event> {
 
 // Data model
 
-data class Guard(val id: Int, val minutesAsleep: Int, val daysByMinute: Map<Int, Int>) {
-
-    fun sleep(minutes: IntRange): Guard {
-        val days = daysByMinute.toMutableMap()
-        minutes.forEach { m -> days[m] = (days[m] ?: 0) + 1 }
-        return Guard(id, minutesAsleep + days.size, days)
-    }
-}
+data class Guard(val id: Int, val minutesAsleep: Int, val daysByMinute: Map<Int, Int>)
 
 // Event interpreter
 
@@ -63,6 +56,12 @@ sealed class State {
     object Initial: State()
     data class OnDuty(val guard: Guard): State()
     data class Asleep(val guard: Guard, val sleepMinute: Int): State()
+}
+
+fun Guard.sleep(minutes: IntRange): Guard {
+    val days = daysByMinute.toMutableMap()
+    minutes.forEach { m -> days[m] = (days[m] ?: 0) + 1 }
+    return Guard(id, minutesAsleep + minutes.endInclusive - minutes.start + 1, days)
 }
 
 fun runEvents(events: List<Event>): List<Guard> {
@@ -81,17 +80,37 @@ fun runEvents(events: List<Event>): List<Guard> {
             }
             is Event.WakeUp -> when(state) {
                 is State.Asleep -> {
-                    guards[state.guard.id] = state.guard.sleep(state.sleepMinute .. event.time.minute - 1)
-                    State.OnDuty(state.guard)
+                    val guard = state.guard.sleep(state.sleepMinute .. event.time.minute - 1)
+                    guards[state.guard.id] = guard
+                    State.OnDuty(guard)
                 }
                 else -> throw IllegalStateException("WakeUp event in ${state}")
             }
         }
     }
+
     return guards.values.toList()
+}
+
+// Part 1
+
+fun mostMinutesAsleep(guards: Collection<Guard>): Guard {
+    return guards.sortedBy { g -> g.minutesAsleep }.last()
+}
+
+fun mostAsleepMinute(guard: Guard): Int {
+    return guard.daysByMinute.entries.sortedBy { e -> e.value }.last().key
+}
+
+fun part1(guards: Collection<Guard>): Int {
+    val guard = mostMinutesAsleep(guards)
+    val minute = mostAsleepMinute(guard)
+    return guard.id * minute
 }
 
 fun main(args: Array<String>) {
     val events = parseEvents(args[0])
-    println(runEvents(events))
+    val guards = runEvents(events)
+
+    println("Part 1: ${part1(guards)}")
 }
