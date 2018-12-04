@@ -95,11 +95,11 @@ fun runEvents(events: List<Event>): List<Guard> {
 // Part 1
 
 fun mostMinutesAsleep(guards: Collection<Guard>): Guard {
-    return guards.sortedBy { g -> g.minutesAsleep }.last()
+    return guards.maxBy { g -> g.minutesAsleep } ?: throw IllegalArgumentException()
 }
 
 fun mostAsleepMinute(guard: Guard): Int {
-    return guard.daysByMinute.entries.sortedBy { e -> e.value }.last().key
+    return guard.daysByMinute.entries.maxBy { e -> e.value }?.key ?: throw IllegalArgumentException()
 }
 
 fun part1(guards: Collection<Guard>): Int {
@@ -116,7 +116,7 @@ fun part2(guards: Collection<Guard>): Int {
         guard.daysByMinute.map { (minute, count) -> SleepEvent(guard.id, minute, count) }
     }
 
-    val mostFrequent = sleepEvents.sortedBy { e -> e.count }.last()
+    val mostFrequent = sleepEvents.maxBy { e -> e.count } ?: throw IllegalArgumentException()
     return mostFrequent.guard * mostFrequent.minute
 }
 

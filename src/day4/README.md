@@ -128,7 +128,7 @@ direct translation of the Strategy 1 description into code:
 ```
 fun part1(guards: Collection<Guard>): Int {
     val guard = guards.sortedBy { g -> g.minutesAsleep }.last()
-    val minute = guard.daysByMinute.entries.sortedBy { e -> e.value }.last().key
+    val minute = guard.daysByMinute.entries.maxBy { e -> e.value }.key
     return guard.id * minute
 }
 ```
