@@ -16,3 +16,8 @@ the part 1 algorithm on the result. Collect these results and pick the
 smallest.
 
 I didn't enjoy this one.
+
+## Update
+
+After seeing Ali Spittel's wonderful solution on [dev.to](https://dev.to/aspittel/comment/7bid)
+I had to reimplement it that way. Kicking myself.

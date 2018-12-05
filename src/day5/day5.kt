@@ -5,31 +5,24 @@ import java.io.File
 fun reacts(x: Char, y: Char): Boolean =
     x != y && x.toLowerCase() == y.toLowerCase()
 
-fun runReactions(s: List<Char>): List<Char> =
-    s.fold(listOf<Char>()) { result, c ->
-        if (result.isEmpty())
-            listOf(c)
-        else if (reacts(result.last(), c))
-            result.dropLast(1)
+fun runReactions(s: List<Char>): Int =
+    s.fold(listOf<Char>()) { stack: List<Char>, c: Char ->
+        if (stack.isEmpty() || !reacts(stack.last(), c))
+            stack + c
         else
-            result + c
-    }
-
-tailrec fun runUntilStable(s: List<Char>): List<Char> {
-    val newS = runReactions(s)
-    return if (newS == s) newS else runUntilStable(newS)
-}
+            stack.dropLast(1)
+    }.size
 
 fun removeUnits(s: List<Char>, c: Char): List<Char> =
     s.filter { x -> x.toLowerCase() != c }
 
 fun part1(s: CharArray): Int {
-    return runUntilStable(s.toList()).size
+    return runReactions(s.toList())
 }
 
 fun part2(s: CharArray): Int? {
     val sl = s.toList()
-    val sizes: List<Int> = ('a'..'z').map { c -> runUntilStable(removeUnits(sl, c)).size }
+    val sizes: List<Int> = ('a'..'z').map { c -> runReactions(removeUnits(sl, c)) }
     return sizes.min()
 }
 
