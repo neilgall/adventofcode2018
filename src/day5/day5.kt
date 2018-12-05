@@ -20,8 +20,21 @@ tailrec fun runUntilStable(s: List<Char>): List<Char> {
     return if (newS == s) newS else runUntilStable(newS)
 }
 
+fun removeUnits(s: List<Char>, c: Char): List<Char> =
+    s.filter { x -> x.toLowerCase() != c }
+
+fun part1(s: CharArray): Int {
+    return runUntilStable(s.toList()).size
+}
+
+fun part2(s: CharArray): Int? {
+    val sl = s.toList()
+    val sizes: List<Int> = ('a'..'z').map { c -> runUntilStable(removeUnits(sl, c)).size }
+    return sizes.min()
+}
+
 fun main(args: Array<String>) {
     val input = File(args[0]).readText().trim().toCharArray()
-    val result = runUntilStable(input.toList())
-    println("Part 1: ${result.size}")
+    println("Part 1: ${part1(input)}")
+    println("Part 2: ${part2(input)}")
 }
