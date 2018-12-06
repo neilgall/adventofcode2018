@@ -13,6 +13,9 @@ data class Box(val x: IntRange, val y: IntRange) {
     companion object {
         val EMPTY = Box(IntRange.EMPTY, IntRange.EMPTY)
     }
+
+    val width: Int = x.endInclusive - x.start + 1
+    val height: Int = y.endInclusive - y.start + 1
 }
 
 enum class Dir { UP, DOWN, LEFT, RIGHT }
@@ -63,40 +66,25 @@ fun Cell.claimedBy(id: CoordinateID): Boolean = when(this) {
     else -> false
 }
 
-data class Space(val box: Box) {
-    val cells: Array<Array<Cell>>
-
-    init {
-        val width = box.x.endInclusive - box.x.start + 1
-        val height = box.y.endInclusive - box.y.start + 1
-        cells = Array<Array<Cell>>(height) { Array<Cell>(width) { Cell.Unclaimed } }
-    }
-
+data class Space<T>(val box: Box, val cells: Array<Array<T>>) {
     fun rowIndex(p: Pos): Int = p.y - box.y.start
     fun colIndex(p: Pos): Int = p.x - box.x.start
 
-    fun topEdge(): Array<Cell> = cells.first()
-    fun bottomEdge(): Array<Cell> = cells.last()
-    fun leftEdge(): List<Cell> = cells.map { row -> row.first() }
-    fun rightEdge(): List<Cell> = cells.map { row -> row.last() }
+    fun topEdge(): Array<T> = cells.first()
+    fun bottomEdge(): Array<T> = cells.last()
+    fun leftEdge(): List<T> = cells.map { row -> row.first() }
+    fun rightEdge(): List<T> = cells.map { row -> row.last() }
 
-    operator fun get(p: Pos): Cell = cells[rowIndex(p)][colIndex(p)]
-    operator fun set(p: Pos, c: Cell) { cells[rowIndex(p)][colIndex(p)] = c }
+    operator fun get(p: Pos): T = cells[rowIndex(p)][colIndex(p)]
+    operator fun set(p: Pos, c: T) { cells[rowIndex(p)][colIndex(p)] = c }
 
-    override fun toString(): String {
-        val cell: (Cell) -> Char = { c -> when(c) {
-                is Cell.Unclaimed -> ' '
-                is Cell.Coordinate -> 'A' + c.id
-                is Cell.Claimed -> 'a' + c.id
-                is Cell.Equidistant -> '.'
-            }
-        }
-        val row: (Array<Cell>) -> String = { cs -> cs.map(cell).joinToString("") }
-        return cells.map(row).joinToString("\n")
-    }
+    fun count(p: (T) -> Boolean): Int = cells.map { row -> row.count(p) }.sum()
 }
 
-fun Space.fill(c: Coordinate) {
+inline fun <reified T> makeSpace(box: Box, empty: T): Space<T> =
+    Space(box, Array<Array<T>>(box.height) { Array<T>(box.width) { empty } })
+
+fun Space<Cell>.fill(c: Coordinate) {
     val stack = mutableSetOf<Pos>()
 
     fun fill(p: Pos): Set<Pos> {
@@ -139,19 +127,19 @@ sealed class Area {
     data class Finite(val size: Int): Area()
 }
 
-fun Space.areaForCoordinate(id: CoordinateID): Area {
+fun Space<Cell>.areaForCoordinate(id: CoordinateID): Area {
     val claimed: (Cell) -> Boolean = { cell -> cell.claimedBy(id) }
 
     return if (topEdge().any(claimed) || bottomEdge().any(claimed) || leftEdge().any(claimed) || rightEdge().any(claimed))
         Area.Infinite
     else
-        Area.Finite(cells.map { row -> row.count(claimed) }.sum())
+        Area.Finite(count(claimed))
 }
 
 fun part1(input: List<Coordinate>): Area? {
-    val space = Space(spaceExtent(input))
-
+    val space = makeSpace<Cell>(spaceExtent(input), Cell.Unclaimed)
     input.forEach { c -> space[c.pos] = Cell.Coordinate(c.id) }
+
     input.forEach { c -> space.fill(c) }
 
     val areas: List<Area> = input.map { c -> space.areaForCoordinate(c.id) }
@@ -162,9 +150,27 @@ fun part1(input: List<Coordinate>): Area? {
     }}
 }
 
+fun Space<Manhattan>.fillDistances(coords: Collection<Coordinate>) {
+    box.y.forEach { y ->
+        box.x.forEach { x -> 
+            val pos = Pos(x, y)
+            this[pos] = coords.map { c -> c.pos - pos }.sum()
+        }
+    }
+}
+
+fun part2(input: List<Coordinate>, max: Int): Int {
+    val space = makeSpace<Manhattan>(spaceExtent(input), 0)
+    space.fillDistances(input)
+
+    return space.count { d -> d < max }
+}
+
 fun main(args: Array<String>) {
     val input = parse(File(args[0]).readText())
+    val max = if (args.size > 1) args[1].toInt() else 10000
 
-    println("Part1: ${part1(input)}")
+    println("Part 1: ${part1(input)}")
+    println("Part 2: ${part2(input, max)}")
 }
  

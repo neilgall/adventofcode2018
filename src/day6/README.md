@@ -189,3 +189,22 @@ fun Space.areaForCoordinate(id: CoordinateID): Area {
 
 This is not the most efficient form of the algorithm by any means. It will check the
 same cell many times during a pass. It runs in 1.5 seconds on my Thinkpad though.
+
+## Part 2
+
+Part 2 was a bit disappointing as it didn't really build on the first much. I refactored
+the `Space` class to be generic in its content, so I could make a space of manhattan
+distances. Filling it was easy:
+
+```
+fun Space<Manhattan>.fillDistances(coords: Collection<Coordinate>) {
+    box.y.forEach { y ->
+        box.x.forEach { x -> 
+            val pos = Pos(x, y)
+            this[pos] = coords.map { c -> c.pos - pos }.sum()
+        }
+    }
+}
+```
+
+Then the size of the area under the threshold is `space.count { d -> d < max }`
