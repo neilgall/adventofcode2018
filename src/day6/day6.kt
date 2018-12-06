@@ -33,6 +33,8 @@ operator fun Pos.plus(dir: Dir) = when(dir) {
     Dir.RIGHT -> Pos(x+1, y)
 }
 
+fun around(p: Pos): Set<Pos> = enumValues<Dir>().map { dir -> p + dir }.toSet()
+
 typealias CoordinateID = Int
 data class Coordinate(val id: CoordinateID, val pos: Pos)
 
@@ -55,17 +57,31 @@ sealed class Cell {
     data class Equidistant(val distance: Manhattan): Cell()
 }
 
+fun Cell.claimedBy(id: CoordinateID): Boolean = when(this) {
+    is Cell.Claimed -> this.id == id
+    is Cell.Coordinate -> this.id == id
+    else -> false
+}
+
 data class Space(val box: Box) {
     val cells: Array<Array<Cell>>
 
     init {
-        val width = box.x.endInclusive - box.x.start
-        val height = box.y.endInclusive - box.y.start
+        val width = box.x.endInclusive - box.x.start + 1
+        val height = box.y.endInclusive - box.y.start + 1
         cells = Array<Array<Cell>>(height) { Array<Cell>(width) { Cell.Unclaimed } }
     }
 
-    operator fun get(p: Pos): Cell = cells[p.y - box.y.start][p.x - box.x.start]
-    operator fun set(p: Pos, c: Cell) { cells[p.y - box.y.start][p.x - box.x.start] = c }
+    fun rowIndex(p: Pos): Int = p.y - box.y.start
+    fun colIndex(p: Pos): Int = p.x - box.x.start
+
+    fun topEdge(): Array<Cell> = cells.first()
+    fun bottomEdge(): Array<Cell> = cells.last()
+    fun leftEdge(): List<Cell> = cells.map { row -> row.first() }
+    fun rightEdge(): List<Cell> = cells.map { row -> row.last() }
+
+    operator fun get(p: Pos): Cell = cells[rowIndex(p)][colIndex(p)]
+    operator fun set(p: Pos, c: Cell) { cells[rowIndex(p)][colIndex(p)] = c }
 
     override fun toString(): String {
         val cell: (Cell) -> Char = { c -> when(c) {
@@ -81,9 +97,10 @@ data class Space(val box: Box) {
 }
 
 fun Space.fill(c: Coordinate) {
+    val stack = mutableSetOf<Pos>()
 
-    fun fill(p: Pos) {
-        if (!box.contains(p)) return
+    fun fill(p: Pos): Set<Pos> {
+        if (!box.contains(p)) return setOf()
 
         val distance: Manhattan = p - c.pos
         val cell = this[p]
@@ -101,28 +118,53 @@ fun Space.fill(c: Coordinate) {
             }
             is Cell.Coordinate -> cell
         }
-        if (newCell != cell) {
+        return if (newCell != cell) {
             this[p] = newCell
-            fill(p + Dir.UP)
-            fill(p + Dir.DOWN)
-            fill(p + Dir.RIGHT)
-            fill(p + Dir.LEFT)
+            around(p)
+        } else {
+            setOf()
         }
     }
 
-    fill(c.pos + Dir.UP)
-    fill(c.pos + Dir.DOWN)
-    fill(c.pos + Dir.RIGHT)
-    fill(c.pos + Dir.LEFT)
+    stack.addAll(around(c.pos))
+    while (!stack.isEmpty()) {
+        val p = stack.first()
+        stack.addAll(fill(p))
+        stack.remove(p)
+    }
 }
 
-fun main(args: Array<String>) {
-    val input = parse(File(args[0]).readText())
+sealed class Area {
+    object Infinite: Area()
+    data class Finite(val size: Int): Area()
+}
+
+fun Space.areaForCoordinate(id: CoordinateID): Area {
+    val claimed: (Cell) -> Boolean = { cell -> cell.claimedBy(id) }
+
+    return if (topEdge().any(claimed) || bottomEdge().any(claimed) || leftEdge().any(claimed) || rightEdge().any(claimed))
+        Area.Infinite
+    else
+        Area.Finite(cells.map { row -> row.count(claimed) }.sum())
+}
+
+fun part1(input: List<Coordinate>): Area? {
     val space = Space(spaceExtent(input))
 
     input.forEach { c -> space[c.pos] = Cell.Coordinate(c.id) }
     input.forEach { c -> space.fill(c) }
 
-    println(space)
+    val areas: List<Area> = input.map { c -> space.areaForCoordinate(c.id) }
+
+    return areas.maxBy { when(it) {
+        is Area.Finite -> it.size
+        is Area.Infinite -> 0
+    }}
+}
+
+fun main(args: Array<String>) {
+    val input = parse(File(args[0]).readText())
+
+    println("Part1: ${part1(input)}")
 }
  
