@@ -18,13 +18,17 @@ fun parse(input: String): List<Instruction> {
 ## Part 1
 
 Getting a linear ordering of vertices in a directed acyclic graph is called Topological
-Ordering. One way to do this is Kahn's algorithm which is roughly:
-    - start with the initial node (the one with no inputs) in a queue
+Ordering. This is really common in scheduling and resource allocation algorithms. Anywhere
+where there are a graph of dependencies like this.
+
+One technique well known since 1962 is Kahn's algorithm, which is roughly:
+    - start with the nodes with no inputs in a queue
     - while there are nodes to process in the queue
-        - add the node to the output
+        - take a node from the queue
         - remove edges from the graph leading from this node
         - for every node reachable from this node
             - if there are no more incoming edges, add it to the queue
+        - add the node to the output
 
 The one variation in this problem is that when there are multiple available
 paths, they should be taken in alphabetical order. Since the queue represents
@@ -60,3 +64,35 @@ fun topologicalOrder(input: List<Instruction>): Sequence<Name> {
 - I deliberately practiced generating sequences as I've not done that much in Kotlin.
 - `from` and `to` are simple helpers to avoid lambdas in the code that's already pretty dense.
 - The data set isn't that big so I just sort the queue on each step.
+
+## Part 2
+
+In part 2 we have multiple elves following the steps. This is a natural extension
+of many scheduling algorithms where multiple jobs can be run at once. Think of
+your favourite build system that runs jobs in parallel. I leaned on a well-known
+algorithm for part 1 but I thought I'd try and solve this part myself for educational
+purposes.
+
+First I want to convert the very imperative, mutation-heavy code from part 1 into a
+more functional solution. To solve the parallel solution I want to be able t apply
+multiple graph changes at once.
+
+The core of the sort algorithm then becomes a tail-recursive function which
+carries out the same steps as above but generating new state each time rather
+than mutating the old:
+
+```
+tailrec fun sort(graph: List<Instruction>, stack: List<Name>, result: List<Name>): List<Name> =
+    if (stack.isEmpty())
+        result
+    else {
+        val step = stack.first()
+        val (edges, graph_) = graph.partition(from(step))
+        val next = edges.filter { e -> graph_.none(to(e.after)) }.map { e -> e.after }
+        val stack_ = (stack.drop(1) + next).sorted()
+        sort(graph_, stack_, result + step)            
+    }
+```
+
+I'm learning new Kotlin collection functions: `partition()` and `none()` proved very useful.
+

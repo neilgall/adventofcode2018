@@ -27,28 +27,30 @@ fun allNames(input: List<Instruction>): Set<Name> =
 fun initials(input: List<Instruction>): Set<Name> =
     allNames(input) - (input.map { it.after }.toSet())
 
-fun topologicalOrder(input: List<Instruction>): Sequence<Name> {
+fun topologicalOrder(input: List<Instruction>): List<Name> {
     fun from(n: Name): (Instruction) -> Boolean = { i -> i.before == n }
     fun to(n: Name): (Instruction) -> Boolean = { i -> i.after == n }
 
-    var graph = input.toMutableList()
-    val stack = initials(input).toMutableList()
-    return generateSequence {
-        when {
-            stack.isEmpty() -> null
-            else -> {
-                val step = stack.removeAt(0)
-                graph.filter(from(step)).forEach { edge ->
-                    graph.remove(edge)
-                    if (graph.none(to(edge.after))) {
-                        stack.add(edge.after)
-                    }
-                }
-                stack.sort()
-                step
-            }
+    data class Graph(val edges: List<Instruction>) {
+        fun removeFrom(name: Name): Pair<Graph, List<Instruction>> {
+            val (remove, retain) = edges.partition(from(name))
+            return Pair(Graph(retain), remove)
         }
+        fun noneTo(name: Name): Boolean = edges.none(to(name))
     }
+
+    tailrec fun sort(graph: List<Instruction>, stack: List<Name>, result: List<Name>): List<Name> =
+        if (stack.isEmpty())
+            result
+        else {
+            val step = stack.first()
+            val (edges, graph_) = graph.partition(from(step))
+            val next = edges.filter { e -> graph_.none(to(e.after)) }.map { e -> e.after }
+            val stack_ = (stack.drop(1) + next).sorted()
+            sort(graph_, stack_, result + step)            
+        }
+
+    return sort(input, initials(input).toList(), listOf())
 }
 
 fun part1(input: List<Instruction>): String {
