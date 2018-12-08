@@ -1,35 +1,41 @@
 package adventofcode2018.day8
 
 import java.io.File
+import org.jparsec.Parser
+import org.jparsec.Parsers.*
+import org.jparsec.Terminals
+import org.jparsec.Scanners
 
 // Parsing
 
-fun parse(input: String): List<Int> {
-    return input.trim().split(" ").map(String::toInt)
+data class Node(val children: List<Node>, val metadata: List<Int>)
+
+fun parse(input: String): Node {
+    val integer = Terminals.IntegerLiteral.PARSER.map(String::toInt)
+
+    val treeRef = Parser.Reference<Node>()
+
+    fun nodeParser(numChildren: Int, numMetadata: Int): Parser<Node> =
+        sequence(
+            treeRef.lazy().times(numChildren),
+            integer.times(numMetadata),
+            ::Node
+        )
+
+    val nodeInfo: Parser<Pair<Int, Int>> = sequence(integer, integer) { nc, nm -> Pair(nc, nm) }
+    val tree: Parser<Node> = nodeInfo.next { (nc, nm) -> nodeParser(nc, nm) }
+    treeRef.set(tree)
+
+    val parser = tree.from(Terminals.IntegerLiteral.TOKENIZER, Scanners.WHITESPACES)
+    return parser.parse(input.trim())
 }
 
 // Part 1
 
-data class Node(val children: List<Node>, val metadata: List<Int>)
-
 fun Node.metadataTotal(): Int =
     metadata.sum() + children.fold(0) { n: Int, c: Node -> n + c.metadataTotal() }
 
-fun tree(input: List<Int>): Pair<Node, List<Int>> {
-    val numChildren = input[0]
-    val numMetadata = input[1]
-
-    val (children, remainder) = (1..numChildren).fold(Pair(listOf<Node>(), input.drop(2))) { (cs, input), _ -> 
-        val (child, input_) = tree(input)
-        Pair(cs + child, input_)
-    }
-
-    val metadata = remainder.take(numMetadata)
-    val node = Node(children, metadata)
-    return Pair(node, remainder.drop(numMetadata))
-}
-
-fun part1(input: List<Int>): Int = tree(input).first.metadataTotal()
+fun part1(input: Node): Int = input.metadataTotal()
 
 // Part 2
 
@@ -41,7 +47,7 @@ fun Node.metadataComplex(): Int =
             total + (if (children.indices.contains(i-1)) children[i-1].metadataComplex() else 0)
         }
 
-fun part2(input: List<Int>): Int = tree(input).first.metadataComplex()
+fun part2(input: Node): Int = input.metadataComplex()
 
 fun main(args: Array<String>) {
     val input = parse(File(args[0]).readText())
