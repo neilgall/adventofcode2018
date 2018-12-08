@@ -96,3 +96,58 @@ tailrec fun sort(graph: List<Instruction>, stack: List<Name>, result: List<Name>
 
 I'm learning new Kotlin collection functions: `partition()` and `none()` proved very useful.
 
+To parallelise the algorithm, singular things (the active step) become sets of things. To
+take account of the length of steps, we need to track the remaining time on each step and
+keep a step on the stack after each iteration if it has time remaining. Finally if we
+sort the stack by active then pending steps, the work continues on the active steps before
+the pending ones begin.
+
+I made a couple of helper data strutures to track steps and remaining time and the final
+result:
+
+```
+typealias Time = Int
+
+data class Work(val name: Name, val remaining: Time): Comparable<Work>
+
+data class Result(val steps: List<Name>, val time: Time)
+```
+
+Not all the code is shown. `Work`'s `compareTo` was defined to put in-progress work
+before pending work, so sorting the stack didn't have to change.
+
+The parallel algorithm looks very similar:
+```
+tailrec fun sort(graph: List<Instruction>, stack: List<Work>, result: Result): Result =
+    if (stack.isEmpty())
+        result
+    else {
+```
+Instead of pulling the top item from the stack, as many steps as workers can be progressed.
+Progress is the smallest remaining time of the active steps. We advance all active steps
+by this amount and find the ones which have finished.
+```
+        val active = stack.take(workers)
+        val progress = active.minBy { w -> w.remaining }?.remaining ?: throw IllegalStateException()
+        val advance = active.map { w -> w.doWork(progress) }
+        val done = advance.filter(Work::done)
+```
+Previously we removed graph edges and found next steps for the single step at the head of 
+the queue, but now we only do that for steps which have just completed. Also there may be
+multiple steps so we compute the sum of all graph changes and newly ready steps.
+```
+        val (edges, graph_) = done.fold(Pair(setOf<Instruction>(), graph)) { (e, g), step -> 
+            val (e_, g_) = g.partition(from(step.name))
+            Pair(e + e_, g_)
+        }
+        val next = edges.filter { e -> graph_.none(to(e.after)) }.map { e -> Work(e.after) }
+```
+For the next iteration, the stack is the set of still-active steps plus any newly ready ones,
+and we add the done steps onto the final result.
+```
+        val stack_ = (stack.drop(workers) + advance.filterNot(Work::done) + next).sorted()
+        val result_ = result.add(done, progress)
+
+        sort(graph_, stack_, result_)
+    }
+```
