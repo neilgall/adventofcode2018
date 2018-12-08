@@ -31,7 +31,20 @@ fun tree(input: List<Int>): Pair<Node, List<Int>> {
 
 fun part1(input: List<Int>): Int = tree(input).first.metadataTotal()
 
+// Part 2
+
+fun Node.metadataComplex(): Int =
+    if (children.isEmpty())
+        metadata.sum()
+    else
+        metadata.fold(0) { total, i ->
+            total + (if (children.indices.contains(i-1)) children[i-1].metadataComplex() else 0)
+        }
+
+fun part2(input: List<Int>): Int = tree(input).first.metadataComplex()
+
 fun main(args: Array<String>) {
     val input = parse(File(args[0]).readText())
     println("Part 1: ${part1(input)}")
+    println("Part 2: ${part2(input)}")
 }

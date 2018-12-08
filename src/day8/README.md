@@ -37,3 +37,15 @@ Summing the metadata is another simple tree traversal:
 fun Node.metadataTotal(): Int =
     metadata.sum() + children.fold(0) { n: Int, c: Node -> n + c.metadataTotal() }
 ```
+
+## Part 2
+Straightforward again, just translate the wordy description into another tree traversal:
+```
+fun Node.metadataComplex(): Int =
+    if (children.isEmpty())
+        metadata.sum()
+    else
+        metadata.fold(0) { total, i ->
+            total + (if (children.indices.contains(i-1)) children[i-1].metadataComplex() else 0)
+        }
+```
