@@ -69,20 +69,19 @@ fun game(marbles: Int, players: Int): Long {
     var circle = Circle<Int>(0)
     var player = (2..players).fold(Circle<Long>(0)) { c, _ -> c.insertClockwise(0) }
 
-    for (marble in 1..marbles) {
+    val (_, finalScores) = (1..marbles).fold(Pair(circle, player)) { (circle, player), marble ->
         when {
             marble % 23 == 0 -> {
                 player[0] += (marble + circle[-7]).toLong()
-                circle = (circle - 7).remove()
+                Pair((circle - 7).remove(), player + 1)
             }
             else -> {
-                circle = (circle + 1).insertClockwise(marble)
+                Pair((circle + 1).insertClockwise(marble), player + 1)
             }
         }
-        player += 1
     }
 
-    return player.take(players).maxBy { it } ?: throw IllegalStateException()
+    return finalScores.take(players).maxBy { it } ?: throw IllegalStateException()
 }
 
 fun testGame(marbles: Int, players: Int, expected: Long) {

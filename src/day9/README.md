@@ -101,17 +101,16 @@ fun game(marbles: Int, players: Int): Int {
     var circle = Circle(0)
     var player = (2..players).fold(Circle(0)) { c, _ -> c.insertClockwise(0) }
 
-    for (marble in 1..marbles) {
+    (1..marbles).fold(Pair(circle, player)) { (circle, player), marble ->
         when {
             marble % 23 == 0 -> {
-                player[0] += marble + circle[-7]
-                circle = (circle - 7).remove()
+                player[0] += (marble + circle[-7]).toLong()
+                Pair((circle - 7).remove(), player + 1)
             }
             else -> {
-                circle = (circle + 1).insertClockwise(marble)
+                Pair((circle + 1).insertClockwise(marble), player + 1)
             }
         }
-        player += 1
     }
 
     return player.take(players).maxBy { it } ?: throw IllegalStateException()
