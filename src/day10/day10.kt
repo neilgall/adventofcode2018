@@ -7,7 +7,8 @@ import org.jparsec.Scanners.*
 
 // data model
 
-fun IntRange.extend(i: Int) = if (this == IntRange.EMPTY) IntRange(i, i) else IntRange(minOf(start, i), maxOf(i, endInclusive))
+fun IntRange.extend(i: Int) =
+    if (this == IntRange.EMPTY) IntRange(i, i) else IntRange(minOf(start, i), maxOf(i, endInclusive))
 
 data class Position(val x: Int, val y: Int)
 
@@ -64,13 +65,16 @@ fun Collection<Position>.render(): String {
     return cells.map { row -> row.joinToString("") }.joinToString("\n")
 }
 
-fun part1(input: Collection<Point>): String {
-    val sizes: List<Pair<Int,Box>> = (1..100000).map { t -> Pair(t, input.map { p -> p.integrate(t) }.boundingBox()) }
+fun solve(input: Collection<Point>): Pair<Int, String> {
+    val sizes: List<Pair<Int, Box>> = (1..100000).map { t -> Pair(t, input.map { p -> p.integrate(t) }.boundingBox()) }
     val time: Int = sizes.minBy { (_, box) -> box.area }?.first ?: throw IllegalStateException()
-    return input.map { p -> p.integrate(time) }.render()
+    val image = input.map { p -> p.integrate(time) }.render()
+    return Pair(time, image)
 }
 
 fun main(args: Array<String>) {
     val input = parse(File(args[0]).readText())
-    println("Part 1:\n${part1(input)}")
+    val solution = solve(input)
+    println(solution.second)
+    println(solution.first)
 }
