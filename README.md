@@ -23,4 +23,5 @@ only and the command-line compiler with a Makefile.
 * [Day9](src/day9/)
 * [Day10](src/day10/)
 * [Day11](src/day11/)
+* [Day12](src/day12/)
 

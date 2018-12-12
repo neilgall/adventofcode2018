@@ -1,6 +1,6 @@
 
 INPUT ?= input.txt
-DAYS := $(patsubst %,day%,1 2 3 4 5 6 7 8 9 10 11)
+DAYS := $(patsubst %,day%,1 2 3 4 5 6 7 8 9 10 11 12)
 all: $(DAYS)
 
 .PHONY: all clean
@@ -25,6 +25,12 @@ build/day%.jar: src/day%/*.kt | toolbox
 		kotlinc -cp build/toolbox.jar:$$cp -d $@ $^
 
 day3: jparsec 
+day4: jparsec
+day6: jparsec
+day7: jparsec
+day8: jparsec
+day10: jparsec
+day12: jparsec
 
 .PHONY: toolbox
 toolbox: build/toolbox.jar
