@@ -14,14 +14,14 @@ data class Region(val value: Int) {
         listOf(16,8,4,2,1).map { b -> if (value and b != 0) '#' else '.'}.joinToString("")
 }
 
-data class State(val plants: BooleanArray, val origin: Int) {
-    constructor(plants: Collection<Boolean>, origin: Int):
+data class State(val plants: BooleanArray, val origin: Long) {
+    constructor(plants: Collection<Boolean>, origin: Long):
         this(plants.toBooleanArray(), origin)
 
-    fun sum(): Int = plants.mapIndexed { i, b -> if (b) i+origin else 0 }.sum()
+    val sum: Long get() = plants.mapIndexed { i, b -> if (b) i+origin else 0 }.sum()
+    val str: String get() = plants.map { if (it) '#' else '.' }.joinToString("")
 
-    override fun toString(): String =
-        "$origin:${plants.map { if (it) '#' else '.' }.joinToString("")}:${sum()}"
+    override fun toString(): String = "$origin:${str}:${sum}"
 }
 
 typealias Rules = Map<Region, Boolean>
@@ -66,20 +66,44 @@ fun State.run(rules: Rules): State {
         .toList()
         .dropLastWhile { !it }
 
-    return when {
-        output[0] -> State(output, origin-2)
-        output[1] -> State(output.drop(1), origin-1)
-        else ->      State(output.drop(2), origin)
-    }
+    val leadingEmpties = output.takeWhile { !it }.count()
+    return State(output.dropWhile { !it }, origin - 2 + leadingEmpties)
 }
 
-fun Game.run(iterations: Long): Int =
-    (1..iterations).fold(initial) { state, _ -> state.run(rules) }.sum()
+fun Game.run(iterations: Long): State =
+    (1..iterations).fold(initial) { state, _ -> state.run(rules) }
 
-fun part1(game: Game): Int = game.run(20)
+fun part1(game: Game): Long = game.run(20).sum
+
+fun part2(game: Game): Long {
+    data class StateInfo(val index: Int, val origin: Long)
+    val states = mutableMapOf<String, StateInfo>()
+    var state = game.initial
+    var count = 0
+    while (!states.containsKey(state.str)) {
+        states[state.str] = StateInfo(count, state.origin)
+        state = state.run(game.rules)
+        count += 1
+    }
+
+    val total: Long = 5000000000
+    val loopStart = states[state.str]!!
+    val loopSize = count - loopStart.index
+    val loops = (total - loopStart.index) / loopSize
+    val originInc = state.origin - loopStart.origin
+
+    println("$total $loopStart $loopSize $loops $originInc")
+
+    val lastLoopStartState = State(state.plants, state.origin + loops * originInc)
+    val lastLoopLength = total % loopSize
+    val lastState = (1..lastLoopLength).fold(lastLoopStartState) { state, _ -> state.run(game.rules) }
+
+    return lastState.sum
+}
 
 fun main(vararg args: String) {
     val game = parse(File(args[0]).readText())
     println(game.rules)
     println("Part 1: ${part1(game)}")
+    println("Part 2: ${part2(game)}")
 }
