@@ -70,10 +70,10 @@ fun State.run(rules: Rules): State {
     return State(output.dropWhile { !it }, origin - 2 + leadingEmpties)
 }
 
-fun Game.run(iterations: Long): State =
-    (1..iterations).fold(initial) { state, _ -> state.run(rules) }
+fun State.run(iterations: Long, rules: Rules): State =
+    (1..iterations).fold(this) { state, _ -> state.run(rules) }
 
-fun part1(game: Game): Long = game.run(20).sum
+fun part1(game: Game): Long = game.initial.run(20, game.rules).sum
 
 fun part2(game: Game): Long {
     data class StateInfo(val index: Int, val origin: Long)
@@ -86,7 +86,7 @@ fun part2(game: Game): Long {
         count += 1
     }
 
-    val total: Long = 5000000000
+    val total: Long = 50_000_000_000
     val loopStart = states[state.str]!!
     val loopSize = count - loopStart.index
     val loops = (total - loopStart.index) / loopSize
@@ -94,9 +94,11 @@ fun part2(game: Game): Long {
 
     println("$total $loopStart $loopSize $loops $originInc")
 
-    val lastLoopStartState = State(state.plants, state.origin + loops * originInc)
-    val lastLoopLength = total % loopSize
-    val lastState = (1..lastLoopLength).fold(lastLoopStartState) { state, _ -> state.run(game.rules) }
+    val lastLoopStartState = State(state.plants, loopStart.origin + loops * originInc)
+    val lastState = if (loopSize == 1) lastLoopStartState else {
+        val lastLoopLength = total % loopSize
+        lastLoopStartState.run(lastLoopLength, game.rules)
+    }
 
     return lastState.sum
 }
