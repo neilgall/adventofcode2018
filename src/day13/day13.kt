@@ -10,7 +10,7 @@ enum class Turn { LEFT, STRAIGHT, RIGHT }
 
 data class Plan(val dir: Dir, val turn: Turn)
 
-data class Cart(val pos: Pos, val plan: Plan, val collided: Boolean = false)
+data class Cart(val id: Int, val pos: Pos, val plan: Plan, val collided: Boolean = false)
 
 typealias Track = Char
 typealias Tracks = List<CharArray>
@@ -38,7 +38,7 @@ fun load(lines: List<String>): Model {
             if (!("^v<>".contains(c)))
                 carts_
             else
-                carts_ + Cart(Pos(x, y), Plan(dirFor(c), Turn.LEFT))
+                carts_ + Cart(carts_.size, Pos(x, y), Plan(dirFor(c), Turn.LEFT))
         }
     }
 
@@ -49,7 +49,17 @@ fun load(lines: List<String>): Model {
     return Model(tracks, carts)
 }
 
-// Part 1
+// Simulation
+
+fun timeline(initial: Model, tick: (Model) -> Model): Sequence<Model> {
+    var model = initial
+    return sequence {
+        while (true) {
+            yield(model)
+            model = tick(model)
+        }
+    }
+}
 
 val scanOrder: Comparator<Cart> =
     Comparator<Cart> { 
@@ -108,8 +118,13 @@ fun Pos.apply(plan: Plan): Pos = when(plan.dir) {
 
 fun Cart.move(tracks: Tracks): Cart {
     val newPlan = plan.adjust(tracks[pos.y][pos.x])
-    return Cart(pos.apply(newPlan), newPlan)
+    return Cart(id, pos.apply(newPlan), newPlan)
 }
+
+val Model.cartsInScanOrder: List<Cart> get() = carts.sortedWith(scanOrder)
+
+
+// Part 1
 
 fun Cart.checkCollisions(carts: Collection<Cart>): Cart =
     if (carts.any { c -> c.collided })
@@ -119,9 +134,7 @@ fun Cart.checkCollisions(carts: Collection<Cart>): Cart =
     else
         this.copy(collided=true)
 
-val Model.cartsInScanOrder: List<Cart> get() = carts.sortedWith(scanOrder)
-
-fun Model.tick(): Model {
+fun Model.tickDetectingCollisions(): Model {
     val newCarts = cartsInScanOrder.fold(carts) { carts_, c ->
         val otherCarts = carts_.filter { it != c }
         otherCarts + c.move(tracks).checkCollisions(otherCarts)
@@ -131,23 +144,43 @@ fun Model.tick(): Model {
 
 fun Model.hasCollisions(): Boolean = carts.any { it.collided }
 
-fun timeline(initial: Model): Sequence<Model> {
-    var model = initial
-    return sequence {
-        while (true) {
-            yield(model)
-            model = model.tick()
-        }
-    }
+fun part1(input: Model): Pos {
+    val endState = timeline(input) { m -> m.tickDetectingCollisions() }
+        .dropWhile { m -> !m.hasCollisions() }
+        .first()
+    return endState.cartsInScanOrder.filter { c -> c.collided }.first().pos
 }
 
-fun part1(input: Model): Pos {
-    val endState = timeline(input).dropWhile { m -> !m.hasCollisions() }.first()
-    endState.cartsInScanOrder.forEach(::println)
-    return endState.cartsInScanOrder.filter { c -> c.collided }.first().pos
+// Part 2
+
+fun Cart.collision(carts: Collection<Cart>): Cart? = carts.find { c -> c.pos == pos }
+
+fun Model.tickRemovingCrashedCarts(): Model {
+    val newCarts = cartsInScanOrder.fold(carts) { carts_, c ->
+        if (!carts_.contains(c)) // removed by collision
+            carts_
+        else {
+            val c_ = c.move(tracks)
+            val otherCarts = carts_.filter { it != c }
+            val crash = c_.collision(otherCarts)
+            if (crash == null)
+                otherCarts + c_
+            else
+                otherCarts.filterNot { it == crash }
+        }
+    }
+    return Model(tracks, newCarts)
+}
+
+fun part2(input: Model): Pos {
+    val endState = timeline(input) { m -> m.tickRemovingCrashedCarts() }
+        .dropWhile { m -> m.carts.size > 1 }
+        .first()
+    return endState.carts.first().pos
 }
 
 fun main(vararg args: String) {
     val input = load(File(args[0]).readLines())
     println("Part 1: ${part1(input)}")
+    println("Part 2: ${part2(input)}")
 }
