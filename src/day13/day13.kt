@@ -22,16 +22,17 @@ data class Model(val tracks: Tracks, val carts: List<Cart>) {
 
 // Parsing
 
-fun dirFor(c: Char): Dir = when(c) {
-    '^' -> Dir.UP
-    'v' -> Dir.DOWN
-    '<' -> Dir.LEFT
-    '>' -> Dir.RIGHT
-    else -> throw IllegalArgumentException()
-}
-
 fun load(lines: List<String>): Model {
+    fun dirFor(c: Char): Dir = when(c) {
+        '^' -> Dir.UP
+        'v' -> Dir.DOWN
+        '<' -> Dir.LEFT
+        '>' -> Dir.RIGHT
+        else -> throw IllegalArgumentException()
+    }
+
     val tracks: Tracks = lines.map(String::toCharArray)
+
     val carts: List<Cart> = tracks.foldIndexed(listOf<Cart>()) { y, carts, row ->
         row.foldIndexed(carts) { x, carts_, c ->
             if (!("^v<>".contains(c)))
@@ -121,8 +122,9 @@ fun Cart.checkCollisions(carts: Collection<Cart>): Cart =
 val Model.cartsInScanOrder: List<Cart> get() = carts.sortedWith(scanOrder)
 
 fun Model.tick(): Model {
-    val newCarts = cartsInScanOrder.fold(listOf<Cart>()) { carts_, c ->
-        carts_ + c.move(tracks).checkCollisions(carts_)
+    val newCarts = cartsInScanOrder.fold(carts) { carts_, c ->
+        val otherCarts = carts_.filter { it != c }
+        otherCarts + c.move(tracks).checkCollisions(otherCarts)
     }
     return Model(tracks, newCarts)
 }
