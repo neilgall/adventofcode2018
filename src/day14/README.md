@@ -36,3 +36,29 @@ And extract the answer:
 return recipies.slice(make..make+9).joinToString("")
 }
 ```
+
+## Part 2
+Part 2 makes the problem slightly harder in that we don't know the eventual
+size of the buffer. A classic approach is to start with some sensible number
+(let's say 1024) and reallocate it twice the size each time we hit the end.
+The number of copies is therefore limited to log2(N).
+
+```
+if (length + new.size >= recipies.size) {
+	recipies += CharArray(recipies.size) { '0' }
+}
+```
+
+The other tricky part is that we don't know how many digits are added to
+the array each iteration, so we can't assume the target string is right
+at the end. I therefore search for the target string from 5 characters before
+the old end to the new end of the array.
+
+```
+if (oldLength >= 5) {
+	val index = recipies.slice(oldLength-5..length-1).joinToString("").indexOf(input)
+	if (index > -1) {
+		return oldLength-5+index
+	}
+}
+```
