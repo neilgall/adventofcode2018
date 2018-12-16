@@ -92,3 +92,58 @@ And checking the number of samples which pass this test is similar:
 fun part1(input: Input): Int =
 	input.samples.map(Sample::test).count { it >= 3 }
 ```
+
+## Part 2
+Now we have to actually map opcodes to instructions. This is an extension of the part 1 puzzle where the samples are matches to opcodes. We have to deduce the unique mapping of opcodes to instructions however. My algorithm for this was:
+
+1. For each sample and each operation
+	- if the operation matches the sample output, add it to the possible set for that opcode
+	- if the operation does not match the sample output, add it to the impossible set for that opcode
+2. Each opcode's resolved set is its possible operations minus its impossible operations
+3. While any opcode's resolved set is not a single operation
+	- find all the opcodes which have resolved to a single operation
+	- remove that operation from all other opcodes
+
+In Kotlin:
+```
+fun matchOpcodes(input: Input): Map<Int, PureOperation> {
+
+	data class Match(val possible: MutableSet<PureOperation>, val notPossible: MutableSet<PureOperation>) {
+		val resolve: Set<PureOperation> get() = possible - notPossible
+		val isResolved: Boolean get() = resolve.size == 1
+		override fun toString(): String = resolve.toString()
+	}
+
+	val matches = mutableMapOf<Int, Match>()
+	(0..15).forEach { i -> matches[i] = Match(mutableSetOf(), mutableSetOf()) }
+
+	input.samples.forEach { sample -> 
+		pureOperations.forEach { op ->
+			val match = matches[sample.instruction.opcode]!!
+			if (sample.matches(op))
+				match.possible += op
+			else
+				match.notPossible += op
+		}
+	}
+
+	while (matches.any { (_, m) -> !m.isResolved }) {
+		matches.filter { (_, m) -> m.isResolved }.forEach { (opcode, resolvedMatch) ->
+			matches.filter  { (key, _) -> key != opcode }
+				   .forEach { (_, match: Match) -> match.notPossible += resolvedMatch.resolve }
+		}
+	}
+
+	if (matches.any { e -> !e.value.isResolved })
+		throw IllegalStateException("failed to match all opcodes: $matches")
+
+	return matches.mapValues { entry -> entry.value.resolve.first() }
+}
+```
+
+Running the program is a simple fold over the registers. Turns out I didn't need my in-place destructive operations after all, so there's a possible refactor there.
+```
+val finalState: Registers = input.program.fold(Registers()) { registers, instr ->
+	opcodes[instr.opcode]!!.run(registers, instr.arguments)
+}
+```

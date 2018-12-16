@@ -7,7 +7,7 @@ import org.jparsec.Scanners.*
 
 // Model
 
-data class Registers(val regs: IntArray) {
+data class Registers(val regs: IntArray = intArrayOf(0, 0, 0, 0)) {
 	constructor(ints: List<Int>): this(IntArray(ints.size) { i -> ints[i] })
 
 	fun copy(): Registers = Registers(regs.toList())
@@ -93,14 +93,65 @@ class PureOperation(val name: String, val run: (Registers, Arguments) -> Registe
 
 val pureOperations = operations.map(::PureOperation)
 
-fun Sample.test(): Int =
-	pureOperations.count { op -> op.run(before, instruction.arguments) == after }
+fun Sample.matches(op: PureOperation): Boolean = op.run(before, instruction.arguments) == after
+
+fun Sample.test(): Int = pureOperations.count { op -> matches(op) }
 
 fun part1(input: Input): Int =
 	input.samples.map(Sample::test).count { it >= 3 }
 
 
+// Part 2
+
+fun matchOpcodes(input: Input): Map<Int, PureOperation> {
+
+	data class Match(val possible: MutableSet<PureOperation>, val notPossible: MutableSet<PureOperation>) {
+		val resolve: Set<PureOperation> get() = possible - notPossible
+		val isResolved: Boolean get() = resolve.size == 1
+		override fun toString(): String = resolve.toString()
+	}
+
+	val matches = mutableMapOf<Int, Match>()
+	(0..15).forEach { i -> matches[i] = Match(mutableSetOf(), mutableSetOf()) }
+
+	input.samples.forEach { sample -> 
+		pureOperations.forEach { op ->
+			val match = matches[sample.instruction.opcode]!!
+			if (sample.matches(op))
+				match.possible += op
+			else
+				match.notPossible += op
+		}
+	}
+
+	while (matches.any { (_, m) -> !m.isResolved }) {
+		matches.filter { (_, m) -> m.isResolved }.forEach { (opcode, resolvedMatch) ->
+			matches.filter  { (key, _) -> key != opcode }
+				   .forEach { (_, match: Match) -> match.notPossible += resolvedMatch.resolve }
+		}
+	}
+
+	if (matches.any { e -> !e.value.isResolved })
+		throw IllegalStateException("failed to match all opcodes: $matches")
+
+	return matches.mapValues { entry -> entry.value.resolve.first() }
+}
+
+fun part2(input: Input): Int {
+	val opcodes = matchOpcodes(input)
+
+	val finalState: Registers = input.program.fold(Registers()) { registers, instr ->
+		opcodes[instr.opcode]!!.run(registers, instr.arguments)
+	}
+
+	return finalState[0]
+}
+
 fun main(vararg args: String) {
 	val input = parse(File(args[0]).readText())
+	println(matchOpcodes(input))
+
 	println("Part 1: ${part1(input)}")
+	println("Part 2: ${part2(input)}")
+
 }
