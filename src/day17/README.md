@@ -1,0 +1,4 @@
+# Day 17
+Thirsty elves! As a Scotsman a lack of drinking water is an alien concept but we have to help where we can. I remember when this kind of programming challenge seemed impossibly hard but I've been looking forward to one all month. It's basically a depth-first search (no pun intended, although maybe it was by the Advent of Code authors?) with a slight twist: when the water reaches a level where it can flow horizontally it goes in _both_ directions, which amounts to breadth-first searching at those branches. You could be strict with the one-square-at-a-time modelling but it's stated that the water flow is infinite, so magically doubling the water volume at a horizontal branch (by searching both ways) makes no difference to the end result. That's the beauty of thinking of the data structure as a whole rather than the individual nodes in it.
+
+First we need to get that data into the program.
