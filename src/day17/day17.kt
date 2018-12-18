@@ -9,6 +9,7 @@ import org.jparsec.Scanners.*
 
 data class Pos(val x: Int, val y: Int)
 
+fun Pos.up(): Pos = Pos(x, y-1)
 fun Pos.down(): Pos = Pos(x, y+1)
 fun Pos.left(): Pos = Pos(x-1, y)
 fun Pos.right(): Pos = Pos(x+1, y)
@@ -27,6 +28,8 @@ fun IntRange.extend(ir: IntRange) =
 
 data class Box(val x: IntRange, val y: IntRange) {
 	companion object { val EMPTY = Box(IntRange.EMPTY, IntRange.EMPTY) }
+
+	fun grow(n: Int): Box = Box( (x.start-n)..(x.endInclusive+n), (y.start-n)..(y.endInclusive+n) )
 }
 
 fun Collection<Vein>.boundingBox(): Box = fold(Box.EMPTY) { box, v -> when(v) {
@@ -57,67 +60,113 @@ fun parse(input: String): Scan {
 
 // Part 1
 
-fun Scan.vis(filled: Set<Pos>, flows: Set<Pos>) {
-	val grid = Array<CharArray>(boundingBox.y.endInclusive-boundingBox.y.start+1) { CharArray(boundingBox.x.endInclusive-boundingBox.x.start+1) { '.' } }
-	fun set(p: Pos, c: Char) { if (boundingBox.x.contains(p.x) && boundingBox.y.contains(p.y)) grid[p.y-boundingBox.y.start][p.x-boundingBox.x.start] = c }
-
-	veins.forEach { v -> when(v) {
-		is Vein.Vertical -> v.y.forEach { y_ -> set(Pos(v.x, y_), '#') }
-		is Vein.Horizontal -> v.x.forEach { x_ -> set(Pos(x_, v.y), '#') }
-	}}
-	filled.forEach { p -> set(p, '~') }
-	flows.forEach { p -> set(p, '@') }
-	println(grid.map { it.joinToString("") }.joinToString("\n"))
-}
+enum class Fill { EMPTY, WATER, FLOWING, CLAY }
+enum class Flow { BLOCKED, MERGED, FLOWING, DRAINING }
 
 fun Scan.veinAt(p: Pos): Boolean = veins.any { v -> v.isAt(p) }
 
-typealias Path = List<Pos>
-typealias Filled = Set<Pos>
-
-fun Path.goDown(): Path = this + last().down()
-fun Path.goLeft(): Path = this + last().left()
-fun Path.goRight(): Path = this + last().right()
-
 fun Scan.fill(): Set<Pos> {
-	fun reachedBottom(p: Pos): Boolean = p.y == boundingBox.y.endInclusive
 
-	fun fillFrom(path: Path, filled: Filled): Filled {
-		val end = path.last()
+	data class State(val scan: Scan, val filled: MutableMap<Pos, Fill>) {
+		var Pos.fill: Fill
+			get() = when {
+				scan.veinAt(this) -> Fill.CLAY
+				else -> filled[this] ?: Fill.EMPTY
+			}
+			set(f) {
+				filled[this] = f
+			}
 
-		fun empty(p: Pos, f: Filled) = !f.contains(p) && !veinAt(p)
+		fun reachedBottom(p: Pos) = p.y == scan.boundingBox.y.endInclusive
 
-		fun fillDown(): Pair<Path, Filled> {
-			val down: Pos = end.down()
-			return if (empty(down, filled))
-				Pair(path + down, fillFrom(path + down, filled + end))
-			else
-				Pair(path, filled)
+		tailrec fun fillDown(pos: Pos): Flow {
+			// draw("fill down $pos", pos)
+			pos.fill = Fill.FLOWING
+			return if (reachedBottom(pos))
+				Flow.DRAINING
+			else {
+				when (pos.down().fill) {
+					Fill.EMPTY -> fillDown(pos.down())
+					Fill.CLAY, Fill.WATER -> fillUp(pos)
+					Fill.FLOWING -> Flow.MERGED
+				}
+			}
 		}
 
-		fun fillAcross(path: Path, filled: Filled): Set<Pos> {
-			val branchFilled = filled + path.last()
-			val branches = listOf(path.goLeft(), path.goRight())
-				.filter { p -> empty(p.last(), filled) }
-
-			return branches.fold(branchFilled) { f, p -> f + fillFrom(p, branchFilled) }
+		tailrec fun fillUp(pos: Pos): Flow {
+			// draw("fill up $pos", pos)
+			val flowing = maxOf(fillAcross(pos, Pos::left), fillAcross(pos, Pos::right))
+			pos.fill = Fill.WATER
+			return when (flowing) {
+				Flow.BLOCKED, Flow.MERGED -> fillUp(pos.up())
+				else -> {
+					pos.fill = Fill.FLOWING
+					transformRow(pos, Pos::left, Fill.WATER, Fill.FLOWING)
+					transformRow(pos, Pos::right, Fill.WATER, Fill.FLOWING)
+					flowing
+				}
+			}
 		}
 
-		// vis(filled, setOf(end))
+		tailrec fun fillAcross(pos: Pos, move: (Pos) -> Pos): Flow {
+			// draw("fill across $pos", pos)
+			val next = move(pos)
+			return when (next.fill) {
+				Fill.EMPTY -> {
+					next.fill = Fill.WATER
+					when (next.down().fill) {
+						Fill.WATER, Fill.CLAY -> fillAcross(next, move)
+						Fill.EMPTY -> fillDown(next)
+						Fill.FLOWING -> Flow.FLOWING
+					}
+				}
 
-		return if (reachedBottom(end))
-			filled + end
-		else {
-			val (path_, filled_) = fillDown()
-			if (filled_.any(::reachedBottom))
-				filled_
-			else
-				fillAcross(path_, filled_)
+				Fill.FLOWING ->
+					if (next.down().fill == Fill.FLOWING)
+						Flow.MERGED
+					else {
+						next.fill = Fill.EMPTY
+						fillAcross(pos, move)
+					}
+
+				Fill.WATER -> Flow.MERGED
+				else -> Flow.BLOCKED
+			}
+		}
+
+		fun transformRow(pos: Pos, move: (Pos) -> Pos, old: Fill, new: Fill) {
+			// draw("transformRow $pos $old $new", pos)
+			var p = move(pos)
+			while (p.fill == old) {
+				p.fill = new
+				p = move(p)
+			}
+		}
+
+		fun draw(s: String, p: Pos? = null) {
+			val box = scan.boundingBox.grow(5)
+			val grid = Array<CharArray>(box.y.endInclusive+1) { CharArray(box.x.endInclusive-box.x.start+1) { ' ' } }
+			fun set(p: Pos, c: Char) { if (box.x.contains(p.x) && box.y.contains(p.y)) grid[p.y-box.y.start][p.x-box.x.start] = c }
+
+			scan.veins.forEach { v -> when(v) {
+				is Vein.Vertical -> v.y.forEach { y_ -> set(Pos(v.x, y_), '#') }
+				is Vein.Horizontal -> v.x.forEach { x_ -> set(Pos(x_, v.y), '#') }
+			}}
+
+			filled.forEach { (p, f) -> set(p, if (f == Fill.FLOWING) '|' else '~') }
+			p?.let { set(it, '@') }
+			
+			// val drawGrid = if (p == null) grid.toList() else grid.slice(0..p.y+10)
+
+			println(s)
+			println(grid.mapIndexed { i, row -> "${(box.y.start+i).toString().padStart(4, ' ')}: ${row.joinToString("")}" }.joinToString("\n"))
 		}
 	}
 
-	val start = Pos(500, 0)
-	return fillFrom(listOf(start), setOf()) - start
+	val state = State(this, mutableMapOf())
+	state.fillDown(Pos(500, 0))
+	state.draw("end")
+	return state.filled.filter { (p, f) -> boundingBox.y.contains(p.y) && f != Fill.EMPTY }.keys.toSet()
 }
 
 fun main(vararg args: String) {
