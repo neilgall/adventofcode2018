@@ -1,6 +1,6 @@
 
 INPUT ?= input.txt
-DAYS := $(patsubst %,day%,1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17)
+DAYS := $(patsubst %,day%,1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18)
 all: $(DAYS)
 
 .PHONY: all clean
@@ -17,7 +17,7 @@ lib:
 day%: build/day%.jar
 	cp=`cat src/$@/classpath 2>/dev/null || true` && \
 	class=`python -c 'print("$@".capitalize() + "Kt")'` && \
-		kotlin -J-Xmx512m -cp $<:$$cp adventofcode2018.$@.$$class src/$@/$(INPUT)
+		kotlin -J-Xmx2048m -cp $<:$$cp adventofcode2018.$@.$$class src/$@/$(INPUT)
 
 build/day%.jar: src/day%/*.kt | toolbox
 	src=`dirname $<` && \
