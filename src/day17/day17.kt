@@ -140,7 +140,6 @@ fun Pos.to(end: Pos): Sequence<Pos> {
 	}
 }
 
-
 fun Scan.fill(s: Sequence<Pos>, f: Fill) = s.forEach { p -> this[p] = f }
 
 fun Scan.fill() {
@@ -166,6 +165,11 @@ fun Scan.fill() {
 				flows += flow.down()
 			}
 
+			Fill.FLOWING_WATER -> {
+				this[flow] = Fill.FLOWING_WATER
+				// stop here as we merge streams
+			}
+
 			Fill.CLAY, Fill.STILL_WATER -> {
 				val featureLeft = findFeature(flow, Pos::left)
 				val featureRight = findFeature(flow, Pos::right)
@@ -180,24 +184,26 @@ fun Scan.fill() {
 					flows += flow.up()
 				}
 			}
-
-			Fill.FLOWING_WATER -> {
-				this[flow] = Fill.FLOWING_WATER
-				// stop here as we merge streams
-			}
 		}
 	}
 }
 
 fun part1(input: Scan): Int {
 	input.fill()
-	println(input)
 	return input.boundingBox.positions().count { p ->
 		input[p] == Fill.STILL_WATER || input[p] == Fill.FLOWING_WATER 
+	}
+}
+
+fun part2(input: Scan): Int {
+	input.fill()
+	return input.boundingBox.positions().count { p ->
+		input[p] == Fill.STILL_WATER
 	}
 }
 
 fun main(vararg args: String) {
 	val input = parse(File(args[0]).readText())
 	println("Part 1: ${part1(input)}")
+	println("Part 2: ${part2(input)}")
 }
