@@ -12,7 +12,6 @@ sealed class Tree {
 
 fun parseTree(regex: String): Tree {
 	val chars = regex.toCharArray()
-	var pos: Int = 0
 
 	fun parseNode(start: Int): Pair<Int, Tree> {
 		var opts = mutableListOf<Tree>()
@@ -37,6 +36,7 @@ fun parseTree(regex: String): Tree {
 					val t = if (opts.isEmpty()) Tree.Seq(seq) else Tree.Opt(opts + Tree.Seq(seq))
 					return Pair(p, t)
 				}
+				else -> throw IllegalStateException("unexpected char '${chars[p]}'")
 			}
 			p += 1
 		}
@@ -47,7 +47,35 @@ fun parseTree(regex: String): Tree {
 	return parseNode(1).second
 }
 
+// Part 1
+
+fun Tree.hasLoop(): Boolean = when(this) {
+	is Tree.Move -> false
+	is Tree.Seq -> nodes.isEmpty()
+	is Tree.Opt -> nodes.any(Tree::hasLoop)
+}
+
+fun Tree.longestPath(): Int = if (hasLoop()) 0 else when(this) {
+	is Tree.Move -> 1
+	is Tree.Seq -> nodes.map(Tree::longestPath).sum()
+	is Tree.Opt -> nodes.map(Tree::longestPath).max()!!
+}
+
+fun part1(input: Tree): Int = input.longestPath()
+
+fun part1Test(regex: String, expect: Int) {
+	val longest = parseTree(regex).longestPath()
+	println("$regex: longest = $longest expect = $expect, ${longest == expect}")
+}
+
 fun main(vararg args: String) {
 	val input = parseTree(File(args[0]).readText().trim())
-	println(input)
+
+	part1Test("^WNE$", 3)
+	part1Test("^ENWWW(NEEE|SSE(EE|N))$", 10)
+	part1Test("^ENNWSWW(NEWS|)SSSEEN(WNSE|)EE(SWEN|)NNN$", 18)
+	part1Test("^ESSWWN(E|NNENN(EESS(WNSE|)SSS|WWWSSSSE(SW|NNNE)))$", 23)
+	part1Test("^WSSEESWWWNW(S|NENNEEEENN(ESSSSW(NWSW|SSEN)|WSWWN(E|WWS(E|SS))))$", 31)
+
+	println("Part1: ${part1(input)}")
 }
