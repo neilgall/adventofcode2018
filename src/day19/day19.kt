@@ -7,18 +7,21 @@ import org.jparsec.Scanners.*
 
 // Model
 
-data class Registers(val regs: IntArray = intArrayOf(0, 0, 0, 0, 0, 0), val ipBinding: Int) {
-	constructor(ints: List<Int>, ipBinding: Int): this(IntArray(ints.size) { i -> ints[i] }, ipBinding)
+data class Registers(
+	val regs: IntArray = intArrayOf(0, 0, 0, 0, 0, 0),
+	val ipBinding: Int = 0
+) {
+	operator fun get(r: Int): Int = regs[r]
 
-	fun copy(): Registers = Registers(regs.toList(), ipBinding)
+	operator fun set(r: Int, v: Int): Unit { regs[r] = v }
 
-	override fun equals(other: Any?) =
-		other is Registers && regs.size == other.regs.size && regs.zip(other.regs).all { (a,b) -> a == b }
+	val ip: Int get() = regs[ipBinding]
 
-	operator fun get(i: Int): Int = regs[i]
-	operator fun set(i: Int, v: Int): Unit { regs[i] = v }
+	fun step(): Unit {
+		regs[ipBinding] += 1
+	}
 
-	override fun toString(): String = "ip=$ipBinding [${regs.map(Int::toString).joinToString(", ")}]"
+	override fun toString(): String = "ip=$ip ($ipBinding) [${regs.map(Int::toString).joinToString(", ")}]"
 }
 
 data class Arguments(val a: Int, val b: Int, val c: Int) {
@@ -50,22 +53,50 @@ enum class OpCode(val asm: String, val exec: (Registers, Arguments) -> Unit) {
 	EQRR("eqrr", { r, (a, b, c) -> r[c] = if (r[a] == r[b]) 1 else 0 })
 }
 
-sealed class Instruction {
-	data class Operation(val opcode: OpCode, val arguments: Arguments): Instruction()
-	data class ChangeIP(val register: Int): Instruction()
-}
+data class Instruction(val opcode: OpCode, val arguments: Arguments)
 
-fun parse(input: String): List<Instruction> {
+data class Program(val ipBinding: Int, val instructions: List<Instruction>)
+
+fun parse(input: String): Program {
     val integer: Parser<Int> = INTEGER.map(String::toInt)
     val opcode = or(OpCode.values().map { opcode -> string(opcode.asm).retn(opcode) })
  	val arguments = sequence(integer, WHITESPACES.next(integer), WHITESPACES.next(integer), ::Arguments)
- 	val operation: Parser<Instruction> = sequence(opcode, WHITESPACES.next(arguments), Instruction::Operation)
-    val changeip: Parser<Instruction> = string("#ip ").next(integer).map(Instruction::ChangeIP)
- 	val program = or(operation, changeip).sepBy(WHITESPACES)
+ 	val operation: Parser<Instruction> = sequence(opcode, WHITESPACES.next(arguments), ::Instruction)
+    val bindip = string("#ip ").next(integer)
+ 	val program = sequence(bindip, WHITESPACES.next(operation.sepBy(WHITESPACES)), ::Program)
  	return program.parse(input.trim())
+}
+
+// Execution
+
+fun execute(program: Program, r0: Int = 0): Registers {
+	val registers = Registers(ipBinding = program.ipBinding)
+	registers[0] = r0
+
+	while (program.instructions.indices.contains(registers.ip)) {
+		val instr = program.instructions[registers.ip]
+		// println("$registers $instr")
+		instr.opcode.exec(registers, instr.arguments)
+		registers.step()
+	}
+
+	return registers
+}
+
+// Part 1
+
+fun part1(program: Program) = execute(program)[0]
+
+fun part2(program: Program): Int {
+	val modifiedProgram = Program(program.ipBinding, program.instructions.dropLast(1))
+	val numberToFactor = execute(modifiedProgram, r0=1)[3]
+	println("numberToFactor: $numberToFactor")
+	val sumOfDivisions = (1..numberToFactor).asSequence().filter { i -> numberToFactor % i == 0 }.sum()
+	return sumOfDivisions
 }
 
 fun main(vararg args: String) {
 	val input = parse(File(args[0]).readText())
-	println(input)
+	println("Part 1: ${part1(input)}")
+	println("Part 2: ${part2(input)}")
 }
