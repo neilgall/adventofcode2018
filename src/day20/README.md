@@ -4,13 +4,13 @@ Oh no, I've spent 19 days _avoiding_ regular expressions!
 This isn't what it seems though. A regex is a tree, and the answer (to part 1 at least) can be found by a tree traversal. So we'll do just that by parsing the regex into a tree and running the appropriate traversal. 
 
 There are three things that can exist in the tree:
-1. A single move
+1. A single move (the direction doesn't matter)
 2. A sequence of trees
 3. A choice of trees
 
 ```
 sealed class Tree {
-	data class Move(val dir: Dir): Tree()
+	object Move: Tree()
 	data class Seq(val nodes: List<Tree>): Tree()
 	data class Opt(val nodes: List<Tree>): Tree()
 }
@@ -27,10 +27,7 @@ fun parseTree(regex: String): Tree {
 		var p = start
 		while (p < chars.size) {
 			when (chars[p]) {
-				'N' -> seq.add(Tree.Move(Dir.N))
-				'S' -> seq.add(Tree.Move(Dir.S))
-				'E' -> seq.add(Tree.Move(Dir.E))
-				'W' -> seq.add(Tree.Move(Dir.W))
+				'N', 'S', 'E', 'W' -> seq.add(Tree.Move)
 				'(' -> {
 					val (p_, t) = parseNode(p+1)
 					seq.add(t)
@@ -77,3 +74,6 @@ fun Tree.longestPath(): Int = if (hasLoop()) 0 else when(this) {
 	is Tree.Opt -> nodes.map(Tree::longestPath).max()!!
 }
 ```
+
+## Part 2
+The wording of the question has me stumped. "How many rooms can be reached" sounds like how many steps along any path are at least 1000 doors away, but I can't find an answer for that which satisfies the puzzle. I've also tried how many terminal rooms (i.e. at the end of any whole path) are at least 1000 doors away but no luck.
