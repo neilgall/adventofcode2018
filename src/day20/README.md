@@ -11,8 +11,8 @@ There are three things that can exist in the tree:
 ```
 sealed class Tree {
 	object Move: Tree()
-	data class Seq(val nodes: List<Tree>): Tree()
-	data class Opt(val nodes: List<Tree>): Tree()
+	data class Seq(val steps: List<Tree>): Tree()
+	data class Opt(val choices: List<Tree>): Tree()
 }
 ```
 
@@ -64,14 +64,14 @@ Loops are a special case. When a tree has a loop leading it back to the start, t
 ```
 fun Tree.hasLoop(): Boolean = when(this) {
 	is Tree.Move -> false
-	is Tree.Seq -> nodes.isEmpty()
-	is Tree.Opt -> nodes.any(Tree::hasLoop)
+	is Tree.Seq -> steps.isEmpty()
+	is Tree.Opt -> choices.any(Tree::hasLoop)
 }
 
 fun Tree.longestPath(): Int = if (hasLoop()) 0 else when(this) {
 	is Tree.Move -> 1
-	is Tree.Seq -> nodes.map(Tree::longestPath).sum()
-	is Tree.Opt -> nodes.map(Tree::longestPath).max()!!
+	is Tree.Seq -> steps.map(Tree::longestPath).sum()
+	is Tree.Opt -> choices.map(Tree::longestPath).max()!!
 }
 ```
 

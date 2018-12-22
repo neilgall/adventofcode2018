@@ -3,9 +3,10 @@ package adventofcode2018.day20
 import java.io.File
 
 // Model
+data class Pos(val x: Int, val y: Int)
 
 sealed class Tree {
-	object Move: Tree()
+	data class Room(val pos: Pos): Tree()
 	data class Seq(val steps: List<Tree>): Tree()
 	data class Opt(val choices: List<Tree>): Tree()
 }
@@ -14,6 +15,19 @@ sealed class Tree {
 
 fun parseTree(regex: String): Tree {
 	val chars = regex.toCharArray()
+	var pos = Pos(0, 0)
+
+	fun room(dir: Char): Tree {
+		val t = Tree.Room(pos)
+		pos = when (dir) {
+			'N' -> Pos(pos.x, pos.y-1)
+			'S' -> Pos(pos.x, pos.y+1)
+			'E' -> Pos(pos.x+1, pos.y)
+			'W' -> Pos(pos.x-1, pos.y)
+			else -> throw IllegalStateException()
+		}
+		return t
+	}
 
 	fun parseNode(start: Int): Pair<Int, Tree> {
 		var opts = mutableListOf<Tree>()
@@ -21,7 +35,7 @@ fun parseTree(regex: String): Tree {
 		var p = start
 		while (p < chars.size) {
 			when (chars[p]) {
-				'N', 'S', 'E', 'W' -> seq.add(Tree.Move)
+				'N', 'S', 'E', 'W' -> seq.add(room(chars[p]))
 				'(' -> {
 					val (p_, t) = parseNode(p+1)
 					seq.add(t)
@@ -49,13 +63,13 @@ fun parseTree(regex: String): Tree {
 // Part 1
 
 fun Tree.hasLoop(): Boolean = when(this) {
-	is Tree.Move -> false
+	is Tree.Room -> false
 	is Tree.Seq -> steps.isEmpty()
 	is Tree.Opt -> choices.any(Tree::hasLoop)
 }
 
 fun Tree.longestPath(): Int = if (hasLoop()) 0 else when(this) {
-	is Tree.Move -> 1
+	is Tree.Room -> 1
 	is Tree.Seq -> steps.map(Tree::longestPath).sum()
 	is Tree.Opt -> choices.map(Tree::longestPath).max()!!
 }
@@ -71,15 +85,19 @@ fun part1Test(regex: String, expect: Int) {
 
 fun Collection<Int>.product(): Int = fold(1, Int::times)
 
-fun Tree.nodesAtDistance(distance: Int): Int = when(this) {
-	is Tree.Move -> if (distance <= 1) 1 else 0
-	is Tree.Opt -> choices.map { c -> c.nodesAtDistance(distance) }.sum()
-	is Tree.Seq -> steps.mapIndexed { i, s -> when {
-			s is Tree.Opt -> s.nodesAtDistance(distance - i)
-			i == steps.size-1 -> 1
-			else -> 0
-		}}.sum()
+fun Tree.rooms(): Sequence<Pair<Pos, Int>> = sequence {
+	val remaining = mutableListOf(Pair<Tree, Int>(this@rooms, 0))
+	while (!remaining.isEmpty()) {
+		var (node, distance) = remaining.removeAt(0)
+		when (node) {
+			is Tree.Room -> yield(Pair(node.pos, distance))
+			is Tree.Opt -> remaining += node.choices.map { c -> Pair(c, distance) }
+			is Tree.Seq -> remaining += node.steps.mapIndexed { i, s -> Pair(s, distance + i) }
+		}
+	}
 }
+
+fun Tree.nodesAtDistance(distance: Int) = rooms().count { (_, d) -> d >= distance }
 
 fun part2(input: Tree): Int = input.nodesAtDistance(1000)
 
