@@ -5,6 +5,15 @@ import org.jparsec.Parser
 import org.jparsec.Parsers.*
 import org.jparsec.Scanners.*
 
+// Colors
+
+const val ESC = "\u001B"
+const val NORMAL = ESC + "[0"
+const val RED    = ESC + "[0;31m"
+const val GREEN  = ESC + "[0;32m"
+const val BLUE   = ESC + "[0;34m"
+const val WHITE  = ESC + "[0;37m"
+
 // Model
 
 data class Pos(val x: Int, val y: Int) {
@@ -13,9 +22,34 @@ data class Pos(val x: Int, val y: Int) {
 	val left: Pos get() = Pos(x-1, y)
 	val right: Pos get() = Pos(x+1, y)
 	fun neighbours(): Set<Pos> = setOf(up, down, left, right)
+
+	override fun toString(): String = "$x,$y"
 }
 
 data class Model(val depth: Int, val target: Pos)
+
+// 2D array helper
+
+typealias Grid<T> = Array<Array<T>>
+
+inline fun <reified T> makeGrid(width: Int, height: Int, empty: T) =
+	Array<Array<T>>(height) { Array<T>(width) { empty } }
+
+operator fun <T> Grid<T>.get(p: Pos): T = this[p.y][p.x]
+operator fun <T> Grid<T>.set(p: Pos, t: T) { this[p.y][p.x] = t }
+
+fun <T> Grid<T>.positions(): Sequence<Pos> =
+	indices.asSequence().flatMap { y ->
+		this[y].indices.asSequence().map { x -> Pos(x, y) }
+	}
+
+fun <T> Grid<T>.renderWith(f: (Pos, T) -> String): String =
+	mapIndexed { y, row ->
+		val prefix = y.toString().padStart(5, ' ')
+		val line = row.mapIndexed { x, t -> f(Pos(x, y), t) }.joinToString("")
+		"$WHITE$prefix: $line"
+	}.joinToString("\n")
+
 
 // Parsing
 
@@ -30,10 +64,10 @@ fun parse(input: String): Model {
 
 // Part 1
 
-enum class Type(val risk: Int, val symbol: Char) {
-	ROCKY(0, '.'),
-	WET(1, '='),
-	NARROW(2, '|')
+enum class Type(val risk: Int, val symbol: String) {
+	ROCKY (0, "."),
+	WET   (1, "="),
+	NARROW(2, "|")
 }
 
 data class Square(val geologicIndex: Long, val erosionLevel: Long) {
@@ -46,37 +80,29 @@ data class Square(val geologicIndex: Long, val erosionLevel: Long) {
 }
 
 data class Cave(val model: Model, val limit: Pos = model.target) {
-	val grid = Array<Array<Square>>(limit.y+1) { Array<Square>(limit.x+1) { Square(0, 0) }}
+	val grid = makeGrid(limit.x+1, limit.y+1, Square(0, 0))
 
 	init {
 		(0..limit.y).forEach { y ->
 			(0..limit.x).forEach { x ->
+				val p = Pos(x, y)
 				val geologicIndex = when {
-					Pos(x, y) == model.target -> 0
+					p == model.target -> 0
 					y == 0 -> x * 16807L
 					x == 0 -> y * 48271L
-					else -> grid[y][x-1].erosionLevel * grid[y-1][x].erosionLevel
+					else -> grid[p.left].erosionLevel * grid[p.up].erosionLevel
 				}
 				val erosionLevel = (geologicIndex + model.depth) % 20183L
-				grid[y][x] = Square(geologicIndex, erosionLevel)
+				grid[p] = Square(geologicIndex, erosionLevel)
 			}
 		}
 	}
 
-	operator fun get(p: Pos) = grid[p.y][p.x]
-
-	fun positions(): Sequence<Pos> =
-		grid.indices.asSequence().flatMap { y ->
-			grid[y].indices.asSequence().map { x -> Pos(x, y) }
-		}
-
 	fun riskLevel(): Int =
-		grid.asSequence().flatMap { row -> 
-			row.asSequence().map { sq -> sq.type.risk }
-		}.sum()
+		grid.positions().map { p -> grid[p].type.risk }.sum()
 
 	override fun toString(): String =
-		grid.map { row -> row.map { sq -> sq.type.symbol }.joinToString("") }.joinToString("\n")
+		grid.renderWith { _, sq -> sq.type.symbol }
 }
 
 fun part1(input: Model): Int {
@@ -98,82 +124,107 @@ fun Square.availableTools(): Set<Tool> = when(type) {
 	Type.NARROW -> setOf(Tool.TORCH, Tool.NEITHER)
 }
 
-data class State(val time: Int, val tool: Tool)
-
-fun Cave.vis(states: Map<Pos, State>, unvisited: Set<Pos>, current: Pos) {
-	println(grid.mapIndexed { y, row ->
-		row.mapIndexed { x, sq -> 
-			val pos = Pos(x, y)
-			val vis = if (unvisited.contains(pos)) ' ' else '\''
-			val state = when {
-				pos == current ->
-					"  X  "
-				states.containsKey(pos) -> {
-					val t = if (states[pos]!!.time == Int.MAX_VALUE) "##" else "${states[pos]!!.time}"
-					"$t${states[pos]!!.tool.symbol}"
-				}
-				pos == model.target ->
-					" TGT "
-				else -> 
-					"  ${this[pos].type.symbol}  "
-			}
-			"$vis$state".padStart(6, ' ')
-		}.joinToString("")
-	}.joinToString("\n"))
-	println()
+data class State(val prev: State?, val pos: Pos, val time: Int, val tool: Tool) {
+	override fun toString(): String = "$time:${tool.symbol}:$pos"
 }
+
+val State.reversePath: Sequence<State> get() = sequence {
+	var p: State? = this@reversePath
+	while (p != null) {
+		yield(p!!)
+		p = p.prev
+	}
+}
+
+fun Cave.vis(states: Grid<State>, unvisited: Set<Pos>, current: Pos) {
+	val shortest = states[current].reversePath.map { s -> s.pos }.toList()
+
+	println(grid.renderWith { pos, _ ->
+		val color = when {
+			pos == current -> RED
+			unvisited.contains(pos) -> WHITE
+			shortest.contains(pos) -> GREEN
+			else -> BLUE
+		}
+		val state = when {
+			states[pos].prev != null ->
+				"${states[pos].time}${states[pos].tool.symbol}"
+			
+			pos == model.target ->
+				" TGT "
+			
+			else -> 
+				"  ${grid[pos].type.symbol}  "
+		}
+		"$color${state.padStart(5, ' ')}"
+	})
+	println(WHITE)
+}
+
+fun State.move(p: Pos) = State(this, p, time + 1, tool)
+fun State.changeTool(t: Tool) = State(this, pos, time + 7, t)
 
 fun Cave.dijkstra(start: Pos, end: Pos): State {
-	val unvisited = positions().toMutableSet()
-	val statesForPosition = mutableMapOf<Pos, State>()
-	val noPath = State(Int.MAX_VALUE, Tool.NEITHER)
+	val unvisited = grid.positions().toMutableSet()
 
-	fun stateAt(p: Pos) = statesForPosition[p] ?: noPath
-	fun valid(p: Pos) = 0 <= p.x && p.x <= limit.x && 0 <= p.y && p.y <= limit.y
+	val noPath = State(null, Pos(0, 0), Int.MAX_VALUE, Tool.NEITHER)
+	val states = makeGrid(limit.x+1, limit.y+1, noPath)
 
-	statesForPosition[start] = State(0, Tool.TORCH)
-	var current: Pos? = start
+	fun valid(p: Pos) = 
+		unvisited.contains(p) && 0 <= p.x && p.x <= limit.x && 0 <= p.y && p.y <= limit.y
 
-	while (current != null && unvisited.contains(end)) {
-		// vis(statesForPosition, unvisited, current)
+	states[start] = State(null, start, 0, Tool.TORCH)
 
-		val state = stateAt(current)
-		val availableTools = get(current).availableTools()
+	while (unvisited.contains(end)) {
 
-		current.neighbours().filter(::valid).forEach { neighbour ->
-			val neighbourTools = if (neighbour == end) setOf(Tool.TORCH) else get(neighbour).availableTools()
+		val minTime = unvisited.map { p -> states[p].time }.min()
+		unvisited.filter { p -> states[p].time == minTime }.forEach { current ->
 
-			val neighbourState = when {
-				neighbourTools.contains(state.tool) ->
-					State(state.time + 1, state.tool)
+			if (current == Pos(20,503)) vis(states, unvisited, current)
 
-				!neighbourTools.intersect(availableTools).isEmpty() -> 
-					State(state.time + 8, neighbourTools.intersect(availableTools).first())
+			val availableTools = grid[current].availableTools()
+			val state = states[current]
 
-				else ->
-					noPath
+			current.neighbours().filter(::valid).forEach { neighbour ->
+				val neighbourTools = if (neighbour == end) setOf(Tool.TORCH) else grid[neighbour].availableTools()
+
+				val neighbourState =
+					if (neighbourTools.contains(state.tool))
+						state.move(neighbour)
+					else {
+						val commonTools = neighbourTools.intersect(availableTools)
+						if (commonTools.isEmpty())
+							noPath
+						else 
+							state.changeTool(commonTools.first()).move(neighbour)
+					}
+
+				if (neighbourState.time < states[neighbour].time) {
+					states[neighbour] = neighbourState
+				}	
 			}
 
-			if (neighbourState.time < stateAt(neighbour).time) {
-				statesForPosition[neighbour] = neighbourState
-			}
+			unvisited.remove(current)
 		}
-
-		unvisited.remove(current)
-		current = unvisited.minBy { p -> stateAt(p).time }
 	}
 
-	return stateAt(end)
+	return states[end]
 }
 
-fun part2(input: Model): Int? =
-	(1..10).map { scale -> 	
+fun part2(input: Model): Int? {
+	val paths = (3..4).map { scale -> 	
 		val cave = Cave(input, Pos(input.target.x*scale, input.target.y*scale))
 		val state = cave.dijkstra(Pos(0, 0), input.target)
-		println("scale $scale state $state")
-		state.time
-	}.min()
+		println("scale $scale target ${input.target} limit ${cave.limit} time ${state.time}")
+		state.reversePath.toList().reversed()
+	}
 
+	paths[0].zip(paths[1]).forEach { (p3, p4) ->
+		println("scale 3 $p3 scale 4 $p4 ${if (p3.pos == p4.pos) "" else "X"}")
+	}
+
+	return 0
+}
 
 fun main(vararg args: String) {
 	val input = parse(File(args[0]).readText())
