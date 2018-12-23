@@ -12,6 +12,7 @@ data class Pos(val x: Int, val y: Int) {
 	val down: Pos get() = Pos(x, y+1)
 	val left: Pos get() = Pos(x-1, y)
 	val right: Pos get() = Pos(x+1, y)
+	fun neighbours(): Set<Pos> = setOf(up, down, left, right)
 }
 
 data class Model(val depth: Int, val target: Pos)
@@ -85,43 +86,74 @@ fun part1(input: Model): Int {
 
 // Part 2
 
-enum class Tool { 
-	NEITHER,
-	TORCH,
-	CLIMBING_GEAR
+enum class Tool(val symbol: Char) { 
+	NEITHER('N'),
+	TORCH('T'),
+	CLIMBING_GEAR('C')
 }
 
-fun Square.canUseTool(tool: Tool): Boolean = when(type) {
-	Type.ROCKY  -> tool == Tool.CLIMBING_GEAR || tool == Tool.TORCH
-	Type.WET    -> tool == Tool.CLIMBING_GEAR || tool == Tool.NEITHER
-	Type.NARROW -> tool == Tool.TORCH || tool == Tool.NEITHER
+fun Square.availableTools(): Set<Tool> = when(type) {
+	Type.ROCKY  -> setOf(Tool.CLIMBING_GEAR, Tool.TORCH)
+	Type.WET    -> setOf(Tool.CLIMBING_GEAR, Tool.NEITHER)
+	Type.NARROW -> setOf(Tool.TORCH, Tool.NEITHER)
 }
 
 data class State(val time: Int, val tool: Tool)
 
+fun Cave.vis(states: Map<Pos, State>, unvisited: Set<Pos>, current: Pos) {
+	println(grid.mapIndexed { y, row ->
+		row.mapIndexed { x, sq -> 
+			val pos = Pos(x, y)
+			val vis = if (unvisited.contains(pos)) ' ' else '\''
+			val state = when {
+				pos == current ->
+					"  X  "
+				states.containsKey(pos) -> {
+					val t = if (states[pos]!!.time == Int.MAX_VALUE) "##" else "${states[pos]!!.time}"
+					"$t${states[pos]!!.tool.symbol}"
+				}
+				pos == model.target ->
+					" TGT "
+				else -> 
+					"  ${this[pos].type.symbol}  "
+			}
+			"$vis$state".padStart(6, ' ')
+		}.joinToString("")
+	}.joinToString("\n"))
+	println()
+}
+
 fun Cave.dijkstra(start: Pos, end: Pos): State {
 	val unvisited = positions().toMutableSet()
 	val statesForPosition = mutableMapOf<Pos, State>()
+	val noPath = State(Int.MAX_VALUE, Tool.NEITHER)
 
-	fun stateAt(p: Pos) = statesForPosition[p] ?: State(Int.MAX_VALUE, Tool.TORCH)
-	fun valid(p: Pos) = 0 <= p.x && p.x < limit.x && 0 <= p.y && p.y < limit.y
+	fun stateAt(p: Pos) = statesForPosition[p] ?: noPath
+	fun valid(p: Pos) = 0 <= p.x && p.x <= limit.x && 0 <= p.y && p.y <= limit.y
 
 	statesForPosition[start] = State(0, Tool.TORCH)
 	var current: Pos? = start
 
-	while (current != null && !unvisited.isEmpty()) {
+	while (current != null && unvisited.contains(end)) {
+		// vis(statesForPosition, unvisited, current)
+
 		val state = stateAt(current)
-		listOf(current.up, current.down, current.left, current.right).filter(::valid).forEach { neighbour ->
-			val square = get(neighbour)
+		val availableTools = get(current).availableTools()
+
+		current.neighbours().filter(::valid).forEach { neighbour ->
+			val neighbourTools = if (neighbour == end) setOf(Tool.TORCH) else get(neighbour).availableTools()
+
 			val neighbourState = when {
-				neighbour == end && state.tool == Tool.TORCH -> State(state.time + 1, state.tool)
-				neighbour == end && state.tool != Tool.TORCH -> State(state.time + 8, Tool.TORCH)
-				square.canUseTool(state.tool) -> State(state.time + 1, state.tool)
-				square.canUseTool(Tool.NEITHER) -> State(state.time + 8, Tool.NEITHER)
-				square.canUseTool(Tool.TORCH) -> State(state.time + 8, Tool.TORCH)
-				square.canUseTool(Tool.CLIMBING_GEAR) -> State(state.time + 8, Tool.CLIMBING_GEAR)
-				else -> State(Int.MAX_VALUE, Tool.TORCH)
+				neighbourTools.contains(state.tool) ->
+					State(state.time + 1, state.tool)
+
+				!neighbourTools.intersect(availableTools).isEmpty() -> 
+					State(state.time + 8, neighbourTools.intersect(availableTools).first())
+
+				else ->
+					noPath
 			}
+
 			if (neighbourState.time < stateAt(neighbour).time) {
 				statesForPosition[neighbour] = neighbourState
 			}
@@ -134,10 +166,14 @@ fun Cave.dijkstra(start: Pos, end: Pos): State {
 	return stateAt(end)
 }
 
-fun part2(input: Model): State {
-	val cave = Cave(input, Pos(input.target.y*2, input.target.x*2))
-	return cave.dijkstra(Pos(0, 0), input.target)
-}
+fun part2(input: Model): Int? =
+	(1..10).map { scale -> 	
+		val cave = Cave(input, Pos(input.target.x*scale, input.target.y*scale))
+		val state = cave.dijkstra(Pos(0, 0), input.target)
+		println("scale $scale state $state")
+		state.time
+	}.min()
+
 
 fun main(vararg args: String) {
 	val input = parse(File(args[0]).readText())
