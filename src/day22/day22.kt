@@ -105,10 +105,7 @@ data class Cave(val model: Model, val limit: Pos = model.target) {
 		grid.renderWith { _, sq -> sq.type.symbol }
 }
 
-fun part1(input: Model): Int {
-	val cave = Cave(input)
-	return cave.riskLevel()
-}
+fun part1(input: Model): Int = Cave(input).riskLevel()
 
 // Part 2
 

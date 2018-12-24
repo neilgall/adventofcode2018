@@ -42,3 +42,7 @@ fun part1(nanobots: List<Nanobot>): Int {
 	return nanobots.count { n -> (strongest.pos - n.pos) <= strongest.radius }
 }
 ```
+
+## Part 2
+Oh wow, another doozy. I'll get back to you on this one!
+
