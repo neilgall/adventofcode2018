@@ -206,7 +206,7 @@ fun selectTargets(groups: Set<ArmyGroup>): TargetSelection {
 	return groups.sortedWith(attackingOrder).fold(SelectionBuilder(groups, mapOf())) { selection, attackingGroup ->
 		val opposingGroups = selection.unselected.filter { g -> g.type != attackingGroup.type }
 		val defendingGroup = opposingGroups.maxWith(defendingOrder(attackingGroup.unit.attack))
-		if (defendingGroup == null) 
+		if (defendingGroup == null || defendingGroup.damageFrom(attackingGroup.unit.attack) == 0) 
 			selection
 		else 
 			selection.add(attackingGroup, defendingGroup)
@@ -287,5 +287,3 @@ fun part2(groups: Set<ArmyGroup>): Long {
 	return part1(boostImmuneSystem(groups, minimumBoost))
 }
 ```
-
-And yet again, I have a solution that works for the example and not for the real data. Probably the most frustrating aspect of Advent of Code.
