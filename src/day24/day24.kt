@@ -153,7 +153,7 @@ fun selectTargets(groups: Set<ArmyGroup>): TargetSelection {
 	return groups.sortedWith(attackingOrder).fold(SelectionBuilder(groups, mapOf())) { selection, attackingGroup ->
 		val opposingGroups = selection.unselected.filter { g -> g.type != attackingGroup.type }
 		val defendingGroup = opposingGroups.maxWith(defendingOrder(attackingGroup.unit.attack))
-		if (defendingGroup == null) 
+		if (defendingGroup == null || defendingGroup.damageFrom(attackingGroup.unit.attack) == 0L) 
 			selection
 		else 
 			selection.add(attackingGroup, defendingGroup)
