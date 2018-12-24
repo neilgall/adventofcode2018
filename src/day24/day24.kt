@@ -10,7 +10,7 @@ import org.jparsec.Token
 // Model
 
 typealias AttackType = String
-typealias HitPoints = Long
+typealias HitPoints = Int
 typealias Initiative = Int
 
 data class Attack(
@@ -31,7 +31,7 @@ enum class ArmyGroupType { IMMUNE_SYSTEM, INFECTION }
 data class ArmyGroup(
 	val id: Int,
 	val type: ArmyGroupType,
-	val count: Long,
+	val count: Int,
 	val unit: ArmyUnit
 ) { override fun toString() = "$type $id: ${count} <hp=${unit.hitPoints} attack=${unit.attack.damage}>" }
 
@@ -66,7 +66,6 @@ fun parse(input: String): Set<ArmyGroup> {
 
 	// parser
 	val integer = Terminals.IntegerLiteral.PARSER.map(String::toInt)
-	val longInteger = Terminals.IntegerLiteral.PARSER.map(String::toLong)
 
 	data class WeaknessesAndImmunities(val weaknesses: Collection<AttackType>, val immunities: Collection<AttackType>)
 
@@ -85,13 +84,13 @@ fun parse(input: String): Set<ArmyGroup> {
 		weaknessesAndImmunities.optional(WeaknessesAndImmunities(setOf(), setOf()))
 
 	val attack: Parser<Attack> = sequence(
-		longInteger,
+		integer,
 		Terminals.Identifier.PARSER.followedBy(token("damage")),
 		::Attack
 	)
 
 	val unit: Parser<ArmyUnit> = sequence(
-		longInteger,
+		integer,
 		tokens("hit points").next(weaknessesAndImmunitiesOrEmpty),
 		tokens("with an attack that does").next(attack),
 		tokens("at initiative").next(integer),
@@ -101,7 +100,7 @@ fun parse(input: String): Set<ArmyGroup> {
 	)
 
 	fun group(type: ArmyGroupType): Parser<ArmyGroup> = sequence(
-		longInteger,
+		integer,
 		tokens("units each with").next(unit), 
 		{ count, units -> ArmyGroup(0, type, count, units) }
 	)
@@ -135,11 +134,11 @@ val initiativeOrder = Comparator<ArmyGroup> {
 }
 
 val attackingOrder = Comparator<ArmyGroup> {
-	x, y -> (y.effectivePower - x.effectivePower).toInt()
+	x, y -> y.effectivePower - x.effectivePower
 }.then(initiativeOrder)
 
 fun defendingOrder(attack: Attack) = Comparator<ArmyGroup> {
-	x, y -> (x.damageFrom(attack) - y.damageFrom(attack)).toInt()
+	x, y -> x.damageFrom(attack) - y.damageFrom(attack)
 }.then(attackingOrder.reversed())
 
 typealias TargetSelection = Map<Int, Int>
@@ -153,7 +152,7 @@ fun selectTargets(groups: Set<ArmyGroup>): TargetSelection {
 	return groups.sortedWith(attackingOrder).fold(SelectionBuilder(groups, mapOf())) { selection, attackingGroup ->
 		val opposingGroups = selection.unselected.filter { g -> g.type != attackingGroup.type }
 		val defendingGroup = opposingGroups.maxWith(defendingOrder(attackingGroup.unit.attack))
-		if (defendingGroup == null || defendingGroup.damageFrom(attackingGroup.unit.attack) == 0L) 
+		if (defendingGroup == null || defendingGroup.damageFrom(attackingGroup.unit.attack) == 0) 
 			selection
 		else 
 			selection.add(attackingGroup, defendingGroup)
@@ -162,7 +161,7 @@ fun selectTargets(groups: Set<ArmyGroup>): TargetSelection {
 
 fun Set<ArmyGroup>.find(id: Int): ArmyGroup? = find { g -> g.id == id }
 
-operator fun ArmyGroup.minus(killed: Long): ArmyGroup = copy(count = count - killed)
+operator fun ArmyGroup.minus(killed: Int): ArmyGroup = copy(count = count - killed)
 
 fun fight(groups: Set<ArmyGroup>): Set<ArmyGroup> {
 	val targetSelection = selectTargets(groups)
@@ -202,7 +201,7 @@ fun battle(groups: Set<ArmyGroup>): Sequence<Set<ArmyGroup>> = sequence {
 
 // Part 1
 
-fun part1(groups: Set<ArmyGroup>): Long =
+fun part1(groups: Set<ArmyGroup>): Int =
 	battle(groups).last().map { g -> g.count }.sum()
 
 // Part 2
@@ -234,7 +233,7 @@ fun boostImmuneSystem(groups: Set<ArmyGroup>, boost: Int): Set<ArmyGroup> =
 fun immuneSystemWins(groups: Set<ArmyGroup>): Boolean =
 	battle(groups).last().all { g -> g.type == ArmyGroupType.IMMUNE_SYSTEM }
 
-fun part2(groups: Set<ArmyGroup>): Long {
+fun part2(groups: Set<ArmyGroup>): Int {
 	val minimumBoost = binarySearch(1..1000000) { boost ->
 		immuneSystemWins(boostImmuneSystem(groups, boost))
 	}
