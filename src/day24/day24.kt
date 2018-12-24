@@ -79,7 +79,11 @@ fun parse(input: String): Battle {
 		sequence(immunities, token(";").next(weaknesses), { i, w -> WeaknessesAndImmunities(w, i) }),
 		weaknesses.map { w -> WeaknessesAndImmunities(w, setOf()) },
 		immunities.map { i -> WeaknessesAndImmunities(setOf(), i) }
-	)
+	).between(token("("), token(")"))
+
+	val weaknessesAndImmunitiesOrEmpty = weaknessesAndImmunities.optional().map { wi ->
+		wi ?: WeaknessesAndImmunities(setOf(), setOf())
+	}
 
 	val attack: Parser<Attack> = sequence(
 		integer,
@@ -89,14 +93,13 @@ fun parse(input: String): Battle {
 
 	val unit: Parser<ArmyUnit> = sequence(
 		integer,
-		tokens("hit points (").next(weaknessesAndImmunities),
-		tokens(") with an attack that does").next(attack),
+		tokens("hit points").next(weaknessesAndImmunitiesOrEmpty),
+		tokens("with an attack that does").next(attack),
 		tokens("at initiative").next(integer),
 		{ hitPoints, wi, attack, initiative ->
 			ArmyUnit(hitPoints, attack, initiative, wi.weaknesses.toSet(), wi.immunities.toSet())
 		}
 	)
-
 
 	val group: Parser<ArmyGroup> = sequence(
 		integer,
