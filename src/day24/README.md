@@ -240,3 +240,52 @@ orderedAttackIds.fold(groups) { groups_, (attackingGroupId, defendingGroupId) ->
 	}
 }
 ```
+
+## Part 2
+Find the minimum boost that lets the reindeer win? Sounds like a job for a binary search to me. Let's write a binary search that finds the minimum in a range that satisfies a predicate:
+```kotlin
+fun binarySearch(range: IntRange, predicate: (Int) -> Boolean): Int {
+	var currentRange = range
+	do {
+		val midPoint = currentRange.start + (currentRange.endInclusive - currentRange.start) / 2
+		currentRange = if (predicate(midPoint))
+			currentRange.start..midPoint
+		else
+			midPoint+1..currentRange.endInclusive
+	} while (currentRange.endInclusive != currentRange.start)
+	return currentRange.start
+}
+```
+
+We'll need some boosting helpers:
+```kotlin
+fun Attack.boostAttackPower(boost: Int) = copy(damage = damage + boost)
+fun ArmyUnit.boostAttackPower(boost: Int) = copy(attack = attack.boostAttackPower(boost))
+fun ArmyGroup.boostAttackPower(boost: Int) = copy(unit = unit.boostAttackPower(boost))
+
+fun boostImmuneSystem(groups: Set<ArmyGroup>, boost: Int): Set<ArmyGroup> =
+	groups.map { group -> 
+		if (group.type == ArmyGroupType.INFECTION)
+			group
+		else
+			group.boostAttackPower(boost)
+	}.toSet()
+```
+
+A predicate to test a candidate, for use with the search:
+```kotlin
+fun immuneSystemWins(groups: Set<ArmyGroup>): Boolean =
+	battle(groups).last().all { g -> g.type == ArmyGroupType.IMMUNE_SYSTEM }
+```
+
+And the answer becomes a matter of finding the minimum boost and running part 1 again with that boost:
+```kotlin
+fun part2(groups: Set<ArmyGroup>): Long {
+	val minimumBoost = binarySearch(1..1000000) { boost ->
+		immuneSystemWins(boostImmuneSystem(groups, boost))
+	}
+	return part1(boostImmuneSystem(groups, minimumBoost))
+}
+```
+
+And yet again, I have a solution that works for the example and not for the real data. Probably the most frustrating aspect of Advent of Code.
