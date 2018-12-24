@@ -115,11 +115,11 @@ In each case we build the data structure out of the parts available, using an em
 
 What if the whole section is omitted however?
 ```kotlin
-val weaknessesAndImmunitiesOrEmpty = weaknessesAndImmunities.optional().map { wi ->
-	wi ?: WeaknessesAndImmunities(setOf(), setOf())
+val weaknessesAndImmunitiesOrEmpty =
+	weaknessesAndImmunities.optional(WeaknessesAndImmunities(setOf(), setOf()))
 }
 ```
-`.optional()` turns a parser into one which matches its grammar, or nothing at all. If nothing is matched we get a null result, which is easily replaced with an empty data structure.
+`.optional()` turns a parser into one which matches its grammar, or nothing at all. If nothing is matched the provided default is the result of the parse.
 
 Building up the rest of the data structure is relatively easy, just more combinations of parsers all the way up to the full grammar:
 ```kotlin
@@ -145,4 +145,98 @@ val battle: Parser<Battle> = sequence(
 	battleSide("infection"),
 	{ a, b -> Battle(a.toSet(), b.toSet()) }
 )
+```
+
+## Part 1
+It's another iterative simulation with a bunch of details to implement. I chose to do it completely functionally with immutable data, with the overall battle state updated on each step and threaded through the entire calculation. As before I sumulated the whole battle as a sequence of states, and the part 1 result can be obtained from the last in this sequence:
+```kotlin
+fun battle(groups: Set<ArmyGroup>): Sequence<Set<ArmyGroup>> = sequence {
+	var remaining = groups
+	while (remaining.map { g -> g.type }.toSet().size == 2) {
+		remaining = fight(remaining)
+		yield(remaining)
+	}
+}
+
+fun part1(groups: Set<ArmyGroup>): Int =
+	battle(groups).last().map { g -> g.count }.sum()
+```
+
+The `fight()` function must therefore compute the next state for the battle. First it does target selection, the result of which is a map of attacking groups IDs to defending groups IDs. I used IDs as the data objects are immutable and will be getting replaced with modified versions as the battle proceeds.
+
+Target selection needs a set of unselected groups and the set of selections to be threaded through the computation so I wrapped both in a container data structure and gave it a helper function for adding new selections:
+```kotlin
+typealias TargetSelection = Map<Int, Int>
+
+data class SelectionBuilder(val unselected: Set<ArmyGroup>, val selected: TargetSelection) {
+	fun add(attack: ArmyGroup, defend: ArmyGroup) = 
+		SelectionBuilder(unselected - defend, selected + Pair(attack.id, defend.id))
+}
+```
+Selecting targets and fighting involves a few sorts and orderings so I used Kotlin Comparators again:
+```kotlin
+val initiativeOrder = Comparator<ArmyGroup> {
+	x, y -> y.unit.initiative - x.unit.initiative	
+}
+
+val attackingOrder = Comparator<ArmyGroup> {
+	x, y -> y.effectivePower - x.effectivePower
+}.then(initiativeOrder)
+
+fun defendingOrder(attack: Attack) = Comparator<ArmyGroup> {
+	x, y -> x.damageFrom(attack) - y.damageFrom(attack)
+}.then(attackingOrder.reversed())
+```
+These depends on a couple of simple helpers which capture the business logic quite neatly:
+```kotlin
+val ArmyGroup.effectivePower: HitPoints get() = count * unit.attack.damage
+
+fun ArmyGroup.damageFrom(attack: Attack): HitPoints = when {
+	unit.immunities.contains(attack.type) -> 0
+	unit.weaknesses.contains(attack.type) -> attack.damage * 2
+	else -> attack.damage
+}
+```
+Building the target selection now becomes:
+1. Sort the groups in attack order
+2. For each attacking group select the maximum opposing group in defending order
+3. Add the pairing to the selection, removing the defending group from future candidates
+```kotlin
+fun selectTargets(groups: Set<ArmyGroup>): TargetSelection {
+	return groups.sortedWith(attackingOrder).fold(SelectionBuilder(groups, mapOf())) { selection, attackingGroup ->
+		val opposingGroups = selection.unselected.filter { g -> g.type != attackingGroup.type }
+		val defendingGroup = opposingGroups.maxWith(defendingOrder(attackingGroup.unit.attack))
+		if (defendingGroup == null) 
+			selection
+		else 
+			selection.add(attackingGroup, defendingGroup)
+	}.selected
+}
+```
+
+Once we've done the target selection we run the fight. We take the target selection, order the attackers by initiative and put them back into a (now ordered) list of attacker, defender pairs:
+```kotlin
+val orderedAttackIds = targetSelection.keys
+							.mapNotNull(groups::find)
+							.sortedWith(initiativeOrder)
+							.map { g -> Pair(g.id, targetSelection[g.id]!!) }
+```
+
+Running the attacks is pretty simple but we have to be careful to use the _current state_ at each step. `groups` is the set of Army Groups at the beginning of the fight round, `groups_` is the set at the current point in the attack sequence. One nice aspect of this style of design is that by swapping those around it's trivial to change the behaviour from sequential to parallel (i.e. all attacks happen at once), should that requirement change.
+```kotlin
+orderedAttackIds.fold(groups) { groups_, (attackingGroupId, defendingGroupId) ->
+	val attackingGroup = groups_.find(attackingGroupId)
+	val defendingGroup = groups_.find(defendingGroupId)
+	if (attackingGroup == null || defendingGroup == null) // might be eliminated
+		groups_
+	else {
+		val otherGroups = groups_.filterNot { g -> g.id == defendingGroupId }.toSet()
+		val damage = defendingGroup.damageFrom(attackingGroup.unit.attack) * attackingGroup.count
+		val unitsKilled = minOf(damage / defendingGroup.unit.hitPoints, defendingGroup.count)
+		if (unitsKilled == defendingGroup.count)
+			otherGroups
+		else
+			otherGroups + (defendingGroup - unitsKilled)
+	}
+}
 ```

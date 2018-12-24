@@ -26,19 +26,18 @@ data class ArmyUnit(
 	val immunities: Set<AttackType>
 )
 
+enum class ArmyGroupType { IMMUNE_SYSTEM, INFECTION }
+
 data class ArmyGroup(
+	val id: Int,
+	val type: ArmyGroupType,
 	val count: Int,
 	val unit: ArmyUnit
-)
-
-data class Battle(
-	val immuneSystem: Set<ArmyGroup>,
-	val infection: Set<ArmyGroup>
-)
+) { override fun toString() = "$type $id: ${count} <hp=${unit.hitPoints} attack=${unit.attack.damage}>" }
 
 // Parser
 
-fun parse(input: String): Battle {
+fun parse(input: String): Set<ArmyGroup> {
 	// lexer
 	val keywords = listOf(
 		"an", "at", "attack",
@@ -81,9 +80,8 @@ fun parse(input: String): Battle {
 		immunities.map { i -> WeaknessesAndImmunities(setOf(), i) }
 	).between(token("("), token(")"))
 
-	val weaknessesAndImmunitiesOrEmpty = weaknessesAndImmunities.optional().map { wi ->
-		wi ?: WeaknessesAndImmunities(setOf(), setOf())
-	}
+	val weaknessesAndImmunitiesOrEmpty =
+		weaknessesAndImmunities.optional(WeaknessesAndImmunities(setOf(), setOf()))
 
 	val attack: Parser<Attack> = sequence(
 		integer,
@@ -96,32 +94,111 @@ fun parse(input: String): Battle {
 		tokens("hit points").next(weaknessesAndImmunitiesOrEmpty),
 		tokens("with an attack that does").next(attack),
 		tokens("at initiative").next(integer),
-		{ hitPoints, wi, attack, initiative ->
-			ArmyUnit(hitPoints, attack, initiative, wi.weaknesses.toSet(), wi.immunities.toSet())
+		{ hitPoints, wi, attack_, initiative ->
+			ArmyUnit(hitPoints, attack_, initiative, wi.weaknesses.toSet(), wi.immunities.toSet())
 		}
 	)
 
-	val group: Parser<ArmyGroup> = sequence(
+	fun group(type: ArmyGroupType): Parser<ArmyGroup> = sequence(
 		integer,
 		tokens("units each with").next(unit), 
-		::ArmyGroup
+		{ count, units -> ArmyGroup(0, type, count, units) }
 	)
 
-	fun battleSide(name: String): Parser<List<ArmyGroup>> =
+	fun battleSide(name: String, type: ArmyGroupType): Parser<List<ArmyGroup>> =
 		tokens(name)
 		.next(token(":"))
-		.next(group.many1())
+		.next(group(type).many1())
 
-	val battle: Parser<Battle> = sequence(
-		battleSide("immune system"),
-		battleSide("infection"),
-		{ a, b -> Battle(a.toSet(), b.toSet()) }
+	val battle: Parser<Set<ArmyGroup>> = sequence(
+		battleSide("immune system", ArmyGroupType.IMMUNE_SYSTEM),
+		battleSide("infection", ArmyGroupType.INFECTION),
+		{ a, b -> (a + b).mapIndexed { i, g -> g.copy(id = i) }.toSet() }
 	)
 
 	return battle.from(tokenizer, tokenDelimiter).parse(input.trim())
 }
 
+// Battle
+
+val ArmyGroup.effectivePower: HitPoints get() = count * unit.attack.damage
+
+fun ArmyGroup.damageFrom(attack: Attack): HitPoints = when {
+	unit.immunities.contains(attack.type) -> 0
+	unit.weaknesses.contains(attack.type) -> attack.damage * 2
+	else -> attack.damage
+}
+
+val initiativeOrder = Comparator<ArmyGroup> {
+	x, y -> y.unit.initiative - x.unit.initiative	
+}
+
+val attackingOrder = Comparator<ArmyGroup> {
+	x, y -> y.effectivePower - x.effectivePower
+}.then(initiativeOrder)
+
+fun defendingOrder(attack: Attack) = Comparator<ArmyGroup> {
+	x, y -> x.damageFrom(attack) - y.damageFrom(attack)
+}.then(attackingOrder.reversed())
+
+typealias TargetSelection = Map<Int, Int>
+
+fun selectTargets(groups: Set<ArmyGroup>): TargetSelection {
+	data class SelectionBuilder(val unselected: Set<ArmyGroup>, val selected: TargetSelection) {
+		fun add(attack: ArmyGroup, defend: ArmyGroup) = 
+			SelectionBuilder(unselected - defend, selected + Pair(attack.id, defend.id))
+	}
+
+	return groups.sortedWith(attackingOrder).fold(SelectionBuilder(groups, mapOf())) { selection, attackingGroup ->
+		val opposingGroups = selection.unselected.filter { g -> g.type != attackingGroup.type }
+		val defendingGroup = opposingGroups.maxWith(defendingOrder(attackingGroup.unit.attack))
+		if (defendingGroup == null) 
+			selection
+		else 
+			selection.add(attackingGroup, defendingGroup)
+	}.selected
+}
+
+fun Set<ArmyGroup>.find(id: Int): ArmyGroup? = find { g -> g.id == id }
+
+operator fun ArmyGroup.minus(killed: Int): ArmyGroup = copy(count = count - killed)
+
+fun fight(groups: Set<ArmyGroup>): Set<ArmyGroup> {
+	val targetSelection = selectTargets(groups)
+	val orderedAttackIds = targetSelection.keys
+								.mapNotNull(groups::find)
+								.sortedWith(initiativeOrder)
+								.map { g -> Pair(g.id, targetSelection[g.id]!!) }
+
+	return orderedAttackIds.fold(groups) { groups_, (attackingGroupId, defendingGroupId) ->
+		val attackingGroup = groups_.find(attackingGroupId)
+		val defendingGroup = groups_.find(defendingGroupId)
+		if (attackingGroup == null || defendingGroup == null)
+			groups_
+		else {
+			val otherGroups = groups_.filterNot { g -> g.id == defendingGroupId }.toSet()
+			val damage = defendingGroup.damageFrom(attackingGroup.unit.attack) * attackingGroup.count
+			val unitsKilled = minOf(damage / defendingGroup.unit.hitPoints, defendingGroup.count)
+			if (unitsKilled == defendingGroup.count)
+				otherGroups
+			else
+				otherGroups + (defendingGroup - unitsKilled)
+		}
+	}
+}
+
+fun battle(groups: Set<ArmyGroup>): Sequence<Set<ArmyGroup>> = sequence {
+	var remaining = groups
+	while (remaining.map { g -> g.type }.toSet().size == 2) {
+		remaining = fight(remaining)
+		yield(remaining)
+	}
+}
+
+fun part1(groups: Set<ArmyGroup>): Int =
+	battle(groups).last().map { g -> g.count }.sum()
+
 fun main(vararg args: String) {
 	val input = parse(File(args[0]).readText())
-	println(input)
+	println("Part 1: ${part1(input)}")
 }
