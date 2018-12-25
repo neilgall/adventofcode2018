@@ -1,6 +1,6 @@
 
 INPUT ?= input.txt
-DAYS := $(patsubst %,day%,1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24)
+DAYS := $(patsubst %,day%,1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25)
 all: $(DAYS)
 
 .PHONY: all clean
@@ -38,6 +38,7 @@ day21: jparsec
 day22: jparsec
 day23: jparsec
 day24: jparsec
+day25: jparsec
 
 .PHONY: toolbox
 toolbox: build/toolbox.jar
